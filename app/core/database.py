@@ -54,7 +54,9 @@ class Database:
                     progress INTEGER NOT NULL DEFAULT 0,
                     stage TEXT NOT NULL DEFAULT 'queued',
                     created_at TEXT NOT NULL,
+                    started_at TEXT,
                     completed_at TEXT,
+                    retry_count INTEGER NOT NULL DEFAULT 0,
                     request_payload TEXT NOT NULL,
                     result_urls TEXT,
                     error_payload TEXT,
@@ -77,6 +79,14 @@ class Database:
                 CREATE INDEX IF NOT EXISTS idx_jobs_idempotency_key ON jobs(idempotency_key);
                 """
             )
+            # Automatic schema migration check for existing databases
+            cursor = conn.cursor()
+            cursor.execute("PRAGMA table_info(jobs)")
+            cols = [col["name"] for col in cursor.fetchall()]
+            if "started_at" not in cols:
+                conn.execute("ALTER TABLE jobs ADD COLUMN started_at TEXT;")
+            if "retry_count" not in cols:
+                conn.execute("ALTER TABLE jobs ADD COLUMN retry_count INTEGER NOT NULL DEFAULT 0;")
 
     # --- Job Persistence Methods ---
 
@@ -86,8 +96,8 @@ class Database:
         with self._lock, conn:
             conn.execute(
                 """
-                INSERT INTO jobs (job_id, idempotency_key, status, progress, stage, created_at, request_payload, warnings)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO jobs (job_id, idempotency_key, status, progress, stage, created_at, retry_count, request_payload, warnings)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     job_id,
@@ -96,11 +106,36 @@ class Database:
                     0,
                     "queued",
                     now,
+                    0,
                     json.dumps(request_data),
                     json.dumps([]),
                 ),
             )
         return self.get_job(job_id)  # type: ignore
+
+    def start_job(self, job_id: str) -> None:
+        """Mark job as started and actively processing."""
+        now = datetime.now(timezone.utc).isoformat()
+        conn = self.get_connection()
+        with self._lock, conn:
+            conn.execute(
+                """
+                UPDATE jobs
+                SET status = 'processing', started_at = ?, stage = 'validating'
+                WHERE job_id = ?
+                """,
+                (now, job_id),
+            )
+
+    def increment_retry_count(self, job_id: str) -> int:
+        """Increment and return retry count for a job."""
+        conn = self.get_connection()
+        with self._lock, conn:
+            conn.execute("UPDATE jobs SET retry_count = retry_count + 1 WHERE job_id = ?", (job_id,))
+            cursor = conn.cursor()
+            cursor.execute("SELECT retry_count FROM jobs WHERE job_id = ?", (job_id,))
+            row = cursor.fetchone()
+            return row["retry_count"] if row else 1
 
     def get_job(self, job_id: str) -> Optional[Dict[str, Any]]:
         conn = self.get_connection()
@@ -110,6 +145,18 @@ class Database:
         if not row:
             return None
         return self._row_to_dict(row)
+
+    def get_timeline(self, job_id: str) -> Optional[Dict[str, Any]]:
+        job = self.get_job(job_id)
+        if not job:
+            return None
+        return job.get("timeline")
+
+    def get_manifest(self, job_id: str) -> Optional[Dict[str, Any]]:
+        job = self.get_job(job_id)
+        if not job:
+            return None
+        return job.get("manifest")
 
     def update_job_progress(self, job_id: str, status: str, progress: int, stage: str, warnings: Optional[List[str]] = None) -> None:
         conn = self.get_connection()
@@ -147,7 +194,7 @@ class Database:
             conn.execute(
                 """
                 UPDATE jobs
-                SET status = 'succeeded', progress = 100, stage = 'completed', completed_at = ?,
+                SET status = 'completed', progress = 100, stage = 'completed', completed_at = ?,
                     result_urls = ?, timeline = ?, manifest = ?, warnings = ?
                 WHERE job_id = ?
                 """,
@@ -173,6 +220,34 @@ class Database:
                 """,
                 (stage, now, json.dumps(error_payload), job_id),
             )
+
+    def recover_interrupted_jobs(self) -> List[str]:
+        """Detect jobs that were left in processing/running state across restarts."""
+        conn = self.get_connection()
+        recovered_ids = []
+        with self._lock, conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT job_id, stage FROM jobs WHERE status IN ('processing', 'running')")
+            rows = cursor.fetchall()
+            now = datetime.now(timezone.utc).isoformat()
+            for r in rows:
+                jid = r["job_id"]
+                recovered_ids.append(jid)
+                err = {
+                    "code": "INTERRUPTED_BY_RESTART",
+                    "message": "Job execution was interrupted by server process restart. Safely marked for retry.",
+                    "retryable": True,
+                    "details": {"interrupted_at_stage": r["stage"]},
+                }
+                conn.execute(
+                    """
+                    UPDATE jobs
+                    SET status = 'failed', stage = 'interrupted', completed_at = ?, error_payload = ?
+                    WHERE job_id = ?
+                    """,
+                    (now, json.dumps(err), jid),
+                )
+        return recovered_ids
 
     # --- Idempotency Methods ---
 

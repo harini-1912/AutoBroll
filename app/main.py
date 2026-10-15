@@ -25,6 +25,9 @@ async def lifespan(app: FastAPI):
     logger.info("Starting %s v%s in %s mode", settings.APP_NAME, settings.APP_VERSION, settings.ENVIRONMENT)
     db.init_db()
     settings.ensure_directories()
+    recovered = db.recover_interrupted_jobs()
+    if recovered:
+        logger.warning("Recovered %d interrupted job(s) from previous server execution: %s", len(recovered), recovered)
     yield
     logger.info("Shutting down %s", settings.APP_NAME)
 

@@ -69,8 +69,8 @@ def test_get_job_polling_and_completion(client):
     poll_res = client.get(f"/api/v1/jobs/{job_id}")
     assert poll_res.status_code == 200
     job_status = poll_res.json()
-    assert job_status["status"] in ["running", "succeeded"]
-    if job_status["status"] == "succeeded":
+    assert job_status["status"] in ["processing", "running", "completed", "succeeded"]
+    if job_status["status"] in ["completed", "succeeded"]:
         assert job_status["progress"] == 100
         assert "result_urls" in job_status
         assert "captions_srt" in job_status["result_urls"]

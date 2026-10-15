@@ -28,7 +28,7 @@ from app.schemas.job import (
 from app.storage import get_storage
 from app.workers.job_runner import job_runner
 
-router = APIRouter(prefix="/jobs", tags=["Jobs"])
+router = APIRouter(tags=["Jobs"])
 
 @router.post(
     "",
@@ -156,6 +156,42 @@ def get_job_status(job_id: str):
         raise JobNotFoundError(job_id)
     return _build_job_response(job_record)
 
+@router.get(
+    "/{job_id}/timeline",
+    summary="Get Scene Timeline for Job",
+)
+def get_job_timeline(job_id: str):
+    """Retrieve scene-by-scene clip timeline for a completed or processing job."""
+    job_record = db.get_job(job_id)
+    if not job_record:
+        raise JobNotFoundError(job_id)
+
+    timeline = job_record.get("timeline")
+    if not timeline:
+        raise InvalidInputError(
+            f"Timeline not yet available for job '{job_id}'. Current stage: {job_record.get('stage')}.",
+            details={"job_id": job_id, "status": job_record.get("status"), "stage": job_record.get("stage")},
+        )
+    return timeline
+
+@router.get(
+    "/{job_id}/manifest",
+    summary="Get Manifest for Job",
+)
+def get_job_manifest(job_id: str):
+    """Retrieve execution manifest (models, cost, timings, rights) for a completed job."""
+    job_record = db.get_job(job_id)
+    if not job_record:
+        raise JobNotFoundError(job_id)
+
+    manifest = job_record.get("manifest")
+    if not manifest:
+        raise InvalidInputError(
+            f"Manifest not yet available for job '{job_id}'. Current stage: {job_record.get('stage')}.",
+            details={"job_id": job_id, "status": job_record.get("status"), "stage": job_record.get("stage")},
+        )
+    return manifest
+
 @router.post(
     "/{job_id}/scenes/{scene_id}/swap",
     status_code=status.HTTP_202_ACCEPTED,
@@ -176,7 +212,6 @@ def swap_scene_clip(job_id: str, scene_id: str, swap_req: ClipSwapRequest):
     if not scene_found:
         raise SceneNotFoundError(scene_id, job_id)
 
-    # In Phase 3, this invokes partial render; for now, return 202
     return {
         "job_id": job_id,
         "scene_id": scene_id,
@@ -189,39 +224,66 @@ def swap_scene_clip(job_id: str, scene_id: str, swap_req: ClipSwapRequest):
     summary="Download Generated Asset or Metadata",
 )
 def download_asset(job_id: str, filename: str):
-    """Serve output video, SRT, timeline, or manifest file."""
-    # Prevent path traversal
+    """Serve output video, SRT, timeline, or manifest file with strict containment."""
+    # Validate job_id to prevent path traversal
+    if ".." in job_id or "/" in job_id or "\\" in job_id:
+        raise InvalidInputError(f"Invalid characters in job_id: '{job_id}'")
+
     safe_name = Path(filename).name
-    storage = get_storage()
-    rel_path = f"{job_id}/{safe_name}"
+    if not safe_name or safe_name in (".", "..") or ".." in filename:
+        raise InvalidInputError(f"Invalid filename: '{filename}'")
 
+    storage_root = Path(settings.LOCAL_STORAGE_DIR).resolve()
+    target_file = (storage_root / job_id / safe_name).resolve()
+
+    # Enforce directory confinement to output directory
     try:
-        # Check local storage directory first
-        local_target = Path(settings.LOCAL_STORAGE_DIR) / job_id / safe_name
-        if local_target.exists():
-            media_type = "video/mp4" if safe_name.endswith(".mp4") else "application/octet-stream"
-            if safe_name.endswith(".json"):
-                media_type = "application/json"
-            elif safe_name.endswith(".srt"):
-                media_type = "text/plain"
-            return FileResponse(path=str(local_target), filename=safe_name, media_type=media_type)
+        target_file.relative_to(storage_root)
+    except ValueError:
+        raise InvalidInputError("Path traversal outside storage directory detected.")
 
-        # Or read from storage backend
-        data = storage.get_file_bytes(rel_path)
-        media_type = "video/mp4" if safe_name.endswith(".mp4") else "application/octet-stream"
-        return Response(content=data, media_type=media_type)
-    except Exception:
-        raise JobNotFoundError(f"File '{filename}' for job '{job_id}' not found.")
+    if not target_file.exists():
+        # Check storage backend
+        storage = get_storage()
+        rel_path = f"{job_id}/{safe_name}"
+        if storage.exists(rel_path):
+            data = storage.get_file_bytes(rel_path)
+            media_type = "video/mp4" if safe_name.endswith(".mp4") else "application/octet-stream"
+            return Response(content=data, media_type=media_type)
+        raise JobNotFoundError(f"File '{safe_name}' for job '{job_id}' not found.")
+
+    media_type = "video/mp4" if safe_name.endswith(".mp4") else "application/octet-stream"
+    if safe_name.endswith(".json"):
+        media_type = "application/json"
+    elif safe_name.endswith(".srt"):
+        media_type = "text/plain; charset=utf-8"
+
+    return FileResponse(path=str(target_file), filename=safe_name, media_type=media_type)
 
 def _build_job_response(job_dict: Dict[str, Any]) -> JobResponse:
+    job_id = job_dict["job_id"]
+    result_urls = job_dict.get("result_urls") or {}
+
+    # Calculate real-time output availability on storage
+    storage_root = Path(settings.LOCAL_STORAGE_DIR) / job_id
+    outputs_avail = {}
+    for key, url in result_urls.items():
+        fname = Path(url).name
+        outputs_avail[key] = (storage_root / fname).exists()
+
     return JobResponse(
-        job_id=job_dict["job_id"],
+        job_id=job_id,
         status=JobStatus(job_dict["status"]),
         progress=job_dict.get("progress", 0),
         stage=job_dict.get("stage", "queued"),
         created_at=job_dict.get("created_at", ""),
+        started_at=job_dict.get("started_at"),
         completed_at=job_dict.get("completed_at"),
-        result_urls=job_dict.get("result_urls"),
+        retry_count=job_dict.get("retry_count", 0),
+        result_urls=result_urls if result_urls else None,
+        timeline_available=bool(job_dict.get("timeline")),
+        manifest_available=bool(job_dict.get("manifest")),
+        outputs_available=outputs_avail,
         error=job_dict.get("error_payload"),
         warnings=job_dict.get("warnings") or [],
     )

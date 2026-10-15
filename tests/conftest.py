@@ -22,14 +22,16 @@ from app.storage.local import LocalStorage
 def setup_test_environment(monkeypatch, tmp_path):
     """Set up an isolated file-backed test database and storage directory."""
     test_db_file = str(tmp_path / "test.db")
-    test_db = Database(test_db_file)
-    test_db.init_db()
+    db.db_path = test_db_file
+    if hasattr(db._local, "conn"):
+        db._local.conn = None
+    db.init_db()
 
     # Monkeypatch the global db instance in app.core.database and other modules
-    monkeypatch.setattr("app.core.database.db", test_db)
-    monkeypatch.setattr("app.api.v1.endpoints.jobs.db", test_db)
-    monkeypatch.setattr("app.api.v1.endpoints.health.db", test_db)
-    monkeypatch.setattr("app.workers.job_runner.db", test_db)
+    monkeypatch.setattr("app.core.database.db", db)
+    monkeypatch.setattr("app.api.v1.endpoints.jobs.db", db)
+    monkeypatch.setattr("app.api.v1.endpoints.health.db", db)
+    monkeypatch.setattr("app.workers.job_runner.db", db)
 
     # Isolated storage
     test_storage_dir = tmp_path / "storage"

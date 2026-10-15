@@ -1,11 +1,14 @@
 """Job Schemas for IncuBrix API."""
 from enum import Enum
 from typing import Any, Dict, List, Optional
+# pyrefly: ignore [missing-import]
 from pydantic import BaseModel, Field, model_validator
 
 class JobStatus(str, Enum):
     QUEUED = "queued"
+    PROCESSING = "processing"
     RUNNING = "running"
+    COMPLETED = "completed"
     SUCCEEDED = "succeeded"
     FAILED = "failed"
 

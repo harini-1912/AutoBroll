@@ -9,26 +9,44 @@ from typing import Any, Dict, Optional
 correlation_id_ctx: ContextVar[Optional[str]] = ContextVar("correlation_id", default=None)
 job_id_ctx: ContextVar[Optional[str]] = ContextVar("job_id", default=None)
 
+import re
+
+SENSITIVE_PATTERNS = [
+    re.compile(r"(api[_-]?key|secret|token|password|authorization)\s*[:=]\s*['\"]?([a-zA-Z0-9_\-\.]{6,})['\"]?", re.IGNORECASE),
+    re.compile(r"(Bearer\s+)([a-zA-Z0-9_\-\.]{8,})", re.IGNORECASE),
+]
+
+def redact_secrets(text: str) -> str:
+    """Mask credentials and sensitive strings in log outputs."""
+    redacted = text
+    for pattern in SENSITIVE_PATTERNS:
+        redacted = pattern.sub(r"\1 [REDACTED]", redacted)
+    return redacted
+
 class JsonFormatter(logging.Formatter):
-    """Formats log records as structured JSON."""
+    """Formats log records as structured JSON with secret redaction."""
 
     def format(self, record: logging.LogRecord) -> str:
+        msg = redact_secrets(record.getMessage())
         log_payload: Dict[str, Any] = {
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "level": record.levelname,
-            "message": record.getMessage(),
+            "message": msg,
             "logger": record.name,
             "correlation_id": correlation_id_ctx.get() or getattr(record, "correlation_id", None),
             "job_id": job_id_ctx.get() or getattr(record, "job_id", None),
         }
 
         if record.exc_info:
-            log_payload["exception"] = self.formatException(record.exc_info)
+            log_payload["exception"] = redact_secrets(self.formatException(record.exc_info))
 
         # Include custom extra attributes if present
         for key in ("stage", "error_code", "duration_ms", "details"):
             if hasattr(record, key):
-                log_payload[key] = getattr(record, key)
+                val = getattr(record, key)
+                if isinstance(val, str):
+                    val = redact_secrets(val)
+                log_payload[key] = val
 
         return json.dumps(log_payload)
 

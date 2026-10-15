@@ -135,6 +135,62 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/jobs/{job_id}/timeline:
+    get:
+      tags:
+      - Jobs
+      - Jobs
+      summary: Get Scene Timeline for Job
+      description: Retrieve scene-by-scene clip timeline for a completed or processing
+        job.
+      operationId: get_job_timeline_api_v1_jobs__job_id__timeline_get
+      parameters:
+      - name: job_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Job Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/jobs/{job_id}/manifest:
+    get:
+      tags:
+      - Jobs
+      - Jobs
+      summary: Get Manifest for Job
+      description: Retrieve execution manifest (models, cost, timings, rights) for
+        a completed job.
+      operationId: get_job_manifest_api_v1_jobs__job_id__manifest_get
+      parameters:
+      - name: job_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Job Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /api/v1/jobs/{job_id}/scenes/{scene_id}/swap:
     post:
       tags:
@@ -180,7 +236,8 @@ paths:
       - Jobs
       - Jobs
       summary: Download Generated Asset or Metadata
-      description: Serve output video, SRT, timeline, or manifest file.
+      description: Serve output video, SRT, timeline, or manifest file with strict
+        containment.
       operationId: download_asset_api_v1_jobs_download__job_id___filename__get
       parameters:
       - name: job_id
@@ -310,6 +367,62 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/broll/jobs/{job_id}/timeline:
+    get:
+      tags:
+      - B-Roll Jobs
+      - Jobs
+      summary: Get Scene Timeline for Job
+      description: Retrieve scene-by-scene clip timeline for a completed or processing
+        job.
+      operationId: get_job_timeline_api_v1_broll_jobs__job_id__timeline_get
+      parameters:
+      - name: job_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Job Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/broll/jobs/{job_id}/manifest:
+    get:
+      tags:
+      - B-Roll Jobs
+      - Jobs
+      summary: Get Manifest for Job
+      description: Retrieve execution manifest (models, cost, timings, rights) for
+        a completed job.
+      operationId: get_job_manifest_api_v1_broll_jobs__job_id__manifest_get
+      parameters:
+      - name: job_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Job Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /api/v1/broll/jobs/{job_id}/scenes/{scene_id}/swap:
     post:
       tags:
@@ -355,7 +468,8 @@ paths:
       - B-Roll Jobs
       - Jobs
       summary: Download Generated Asset or Metadata
-      description: Serve output video, SRT, timeline, or manifest file.
+      description: Serve output video, SRT, timeline, or manifest file with strict
+        containment.
       operationId: download_asset_api_v1_broll_jobs_download__job_id___filename__get
       parameters:
       - name: job_id
