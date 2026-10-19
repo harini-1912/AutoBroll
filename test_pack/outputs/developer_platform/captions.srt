@@ -1,0 +1,7 @@
+1
+00:00:00,000 --> 00:00:05,290
+A team of developers launches the next generation platform
+
+2
+00:00:05,290 --> 00:00:08,810
+Automated pipelines transform software delivery worldwide

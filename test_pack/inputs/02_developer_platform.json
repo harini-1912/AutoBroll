@@ -1,0 +1,10 @@
+{
+  "name": "developer_platform",
+  "script": "A team of developers launches the next generation platform. Automated pipelines transform software delivery worldwide.",
+  "voice": "en-IN-female",
+  "aspect_ratios": ["16:9"],
+  "captions": {
+    "burn_in": true,
+    "srt": true
+  }
+}

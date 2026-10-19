@@ -1,0 +1,65 @@
+{
+  "job_id": "batch-1792403340509-03_thoughtful_architectu",
+  "total_scenes": 2,
+  "total_duration": 8.83,
+  "scenes": [
+    {
+      "scene_id": "scene_001",
+      "scene_index": 0,
+      "text": "Clean code requires continuous care and disciplined execution",
+      "visual_hint": null,
+      "start_time": 0.0,
+      "end_time": 5.05,
+      "duration": 5.05,
+      "alignment_method": "tts_timestamps",
+      "confidence": 0.95,
+      "raw_clip_path": "storage\\staging\\batch-1792403340509-03_thoughtful_architectu\\downloads\\pixabay_7954.mp4",
+      "clip": {
+        "clip_id": "pixabay_7954",
+        "provider": "pixabay",
+        "source_url": "https://pixabay.com/videos/id-7954/",
+        "download_url": "https://cdn.pixabay.com/video/2017/02/26/7954-205810619_large.mp4",
+        "licence": "Pixabay Content License (Free for commercial use, no attribution required)",
+        "attribution": "Video by MilanWulf from Pixabay",
+        "is_ai_generated": false,
+        "is_real_stock_footage": true,
+        "is_fallback": false,
+        "media_type": "stock_video",
+        "duration": 5.05,
+        "relevance_score": 4.8,
+        "selection_reason": "Primary provider (pixabay) match on 'Clean code requires conti'",
+        "thumbnail_url": "https://cdn.pixabay.com/video/2017/02/26/7954-205810619_large.jpg"
+      },
+      "warnings": []
+    },
+    {
+      "scene_id": "scene_002",
+      "scene_index": 1,
+      "text": "Thoughtful architecture prevents costly refactoring later",
+      "visual_hint": null,
+      "start_time": 5.05,
+      "end_time": 8.83,
+      "duration": 3.78,
+      "alignment_method": "tts_timestamps",
+      "confidence": 0.95,
+      "raw_clip_path": "storage\\staging\\batch-1792403340509-03_thoughtful_architectu\\downloads\\pixabay_203251.mp4",
+      "clip": {
+        "clip_id": "pixabay_203251",
+        "provider": "pixabay",
+        "source_url": "https://pixabay.com/videos/id-203251/",
+        "download_url": "https://cdn.pixabay.com/video/2024/03/06/203251-920308101_large.mp4",
+        "licence": "Pixabay Content License (Free for commercial use, no attribution required)",
+        "attribution": "Video by conte_public from Pixabay",
+        "is_ai_generated": false,
+        "is_real_stock_footage": true,
+        "is_fallback": false,
+        "media_type": "stock_video",
+        "duration": 3.78,
+        "relevance_score": 4.8,
+        "selection_reason": "Primary provider (pixabay) match on 'Thoughtful architecture p'",
+        "thumbnail_url": "https://cdn.pixabay.com/video/2024/03/06/203251-920308101_large.jpg"
+      },
+      "warnings": []
+    }
+  ]
+}

@@ -11,7 +11,7 @@ This document serves as the master specification, requirement traceability matri
 ### 1.1 Must-Haves (All 8 are Pass/Fail)
 | # | Requirement | Specification | Implementation Location | Verification / Test | Evidence Location | Status |
 |---|---|---|---|---|---|---|
-| MH-1 | Both Inputs Work | Audio (`.mp3`, `.wav`, `.m4a` up to 10 min) and Text (TTS synthesis) | `app/services/speech.py`, `app/api/v1/endpoints/jobs.py` | `tests/test_speech.py`, `tests/test_api_jobs.py` | `test_pack/outputs/` | In Progress (Phase 1/2) |
+| MH-1 | Both Inputs Work | Audio (`.mp3`, `.wav`, `.m4a` up to 10 min) and Text (TTS synthesis) | `app/providers/gtts_provider.py`, `app/api/v1/endpoints/jobs.py` | `backend/tests/test_tts_providers.py`, `backend/tests/test_jobs_api.py` | `test_pack/outputs/` | Completed (Phase 4A: Real gTTS & MockTTS integrated) |
 | MH-2 | Meaningful Scenes & Narration Timing | Scene cuts on sentence/phrase boundaries; covers 100% of narration time; narration sets timing | `app/services/segmentation.py`, `app/rendering/timeline.py` | `tests/test_segmentation.py` | `outputs/{job_id}/timeline.json` | Planned (Phase 2) |
 | MH-3 | Licence-Clean Commercial Footage | Source, licence, attribution, and link recorded per clip; commercial use allowed; no watermarks; AI clips flagged | `app/providers/footage/`, `app/services/license.py` | `tests/test_licensing.py` | `outputs/{job_id}/timeline.json` | Planned (Phase 2) |
 | MH-4 | Correct, Consistent Video | Ratios: 16:9, 9:16, 1:1; normalized resolution, 30 fps, H.264/AAC, yuv420p; no black/frozen frames, no audio drift | `app/rendering/ffmpeg_engine.py`, `app/services/validator.py` | `tests/test_rendering.py` | `outputs/{job_id}/video_{ratio}.mp4` | Planned (Phase 2/3) |
@@ -106,7 +106,7 @@ This document serves as the master specification, requirement traceability matri
 
 ### Phase 2: Speech, Segmentation & Footage Search (Current Milestone - Day 2 AM)
 - [x] 11-stage worker orchestration with exponential backoff retries & provider fallback chain
-- [ ] Production TTS provider adapters (gTTS, Edge-TTS, Indic voices)
+- [x] Production TTS provider adapters (gTTS real narration integrated, MockTTS for zero-key test suite)
 - [ ] Real speech-to-text / sentence boundary alignment
 - [ ] Semantic query expansion & double-meaning disambiguation
 - [ ] Stock footage providers: Pexels API, Pixabay API, Curated Stock, AI Video/Motion
@@ -122,7 +122,7 @@ This document serves as the master specification, requirement traceability matri
 - [ ] End-to-end rendering pipeline validation
 
 ### Phase 4: Benchmarks, Hard Cases, Deliverables & Live Demo (Day 3)
-- [ ] Batch runner CLI (`cli/batch_runner.py`)
+- [x] Batch runner CLI (`cli/batch_runner.py`) conforming to Integration Standard IS-10
 - [ ] 10 varied test inputs execution + 5 hard-case tests
 - [ ] Multilingual narration testing (Hindi, Tamil, English)
 - [ ] Independent relevance scoring & correlation analysis

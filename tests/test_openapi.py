@@ -17,9 +17,9 @@ def test_openapi_yaml_exists_and_version():
     assert "/api/v1/jobs" in spec["paths"]
 
 def test_all_api_routes_under_v1():
-    """All application routes must use the /api/v1/ prefix, except /health, /ready, and /docs."""
-    allowed_roots = {"/health", "/ready", "/openapi.yaml", "/", "/docs", "/redoc", "/api/v1/openapi.json", "/docs/oauth2-redirect"}
+    """All application routes must use the /api/v1/ prefix, except /health, /ready, /ui, and /docs."""
+    allowed_roots = {"/health", "/ready", "/openapi.yaml", "/", "/ui", "/docs", "/redoc", "/api/v1/openapi.json", "/docs/oauth2-redirect"}
     for route in app.routes:
         path = getattr(route, "path", None)
-        if path and path not in allowed_roots and not path.startswith("/static"):
+        if path and path not in allowed_roots and not path.startswith("/static") and not path.startswith("/frontend"):
             assert path.startswith("/api/v1/"), f"Route '{path}' must be under /api/v1/"

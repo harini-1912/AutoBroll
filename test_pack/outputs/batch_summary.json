@@ -1,0 +1,30 @@
+{
+  "timestamp": "2026-10-19T09:49:39.054770+00:00",
+  "total_jobs": 1,
+  "succeeded": 1,
+  "failed": 0,
+  "success_rate_percent": 100.0,
+  "total_elapsed_seconds": 39.0,
+  "average_job_duration_seconds": 38.46,
+  "jobs": [
+    {
+      "name": "03_thoughtful_architecture",
+      "job_id": "batch-1792403340509-03_thoughtful_architectu",
+      "status": "completed",
+      "error": null,
+      "duration_seconds": 38.46,
+      "video_duration": 8.83,
+      "scene_count": 2,
+      "output_files": [
+        "captions.srt",
+        "concat_16_9.txt",
+        "concat_9_16.txt",
+        "manifest.json",
+        "narration.wav",
+        "timeline.json",
+        "video_16_9.mp4",
+        "video_9_16.mp4"
+      ]
+    }
+  ]
+}

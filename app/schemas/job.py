@@ -50,10 +50,30 @@ class JobCreateRequest(BaseModel):
         return self
 
 class ClipSwapRequest(BaseModel):
-    scene_id: str = Field(..., description="ID of the scene whose clip is to be swapped")
+    scene_id: Optional[str] = Field(None, description="ID of the scene whose clip is to be swapped")
     clip_id: Optional[str] = Field(None, description="Specific candidate clip ID to use")
     query_override: Optional[str] = Field(None, description="Override query for footage search")
-    provider_override: Optional[str] = Field(None, description="Provider preference ('pexels', 'pixabay', 'ai_motion', 'curated')")
+    search_description: Optional[str] = Field(None, description="Alternative search prompt or visual description")
+    provider_override: Optional[str] = Field(None, description="Provider preference ('pexels', 'pixabay', 'ai_motion', 'curated', 'mock')")
+    video_url: Optional[str] = Field(None, description="Direct URL to external video footage clip")
+
+class SceneClipReplacementRequest(BaseModel):
+    clip_id: Optional[str] = Field(None, description="Specific candidate clip ID to use")
+    query_override: Optional[str] = Field(None, description="Override query for footage search")
+    search_description: Optional[str] = Field(None, description="Alternative search prompt or visual description")
+    provider_override: Optional[str] = Field(None, description="Provider preference ('pexels', 'pixabay', 'ai_motion', 'curated', 'mock')")
+    video_url: Optional[str] = Field(None, description="Direct URL to external video footage clip")
+
+class SceneClipReplacementResponse(BaseModel):
+    job_id: str
+    scene_id: str
+    status: str = Field("completed", description="Status of the replacement operation")
+    message: str
+    affected_aspect_ratios: List[str]
+    swapped_clip: Optional[Dict[str, Any]] = None
+    result_urls: Optional[Dict[str, str]] = None
+    timeline_url: Optional[str] = None
+    manifest_url: Optional[str] = None
 
 class JobResponse(BaseModel):
     job_id: str

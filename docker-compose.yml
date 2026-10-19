@@ -1,9 +1,9 @@
 services:
-  app:
+  backend:
     build:
-      context: .
+      context: ./backend
       dockerfile: Dockerfile
-    container_name: incubrix-engine
+    container_name: incubrix-backend
     restart: unless-stopped
     ports:
       - "8000:8000"
@@ -25,9 +25,21 @@ services:
     volumes:
       - app_data:/app/data
       - app_storage:/app/storage
+      - ./frontend:/app/frontend:ro
     depends_on:
       minio:
         condition: service_healthy
+
+  frontend:
+    image: nginx:alpine
+    container_name: incubrix-frontend
+    restart: unless-stopped
+    ports:
+      - "3000:80"
+    volumes:
+      - ./frontend:/usr/share/nginx/html:ro
+    depends_on:
+      - backend
 
   minio:
     image: minio/minio:latest

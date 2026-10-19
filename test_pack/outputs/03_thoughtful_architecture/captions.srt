@@ -1,0 +1,7 @@
+1
+00:00:00,000 --> 00:00:05,049
+Clean code requires continuous care and disciplined execution
+
+2
+00:00:05,049 --> 00:00:08,830
+Thoughtful architecture prevents costly refactoring later

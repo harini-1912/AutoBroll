@@ -1,0 +1,10 @@
+{
+  "name": "finance_tutorial",
+  "script": "Saving money consistently provides financial resilience. Smart investments compound over time to build true wealth.",
+  "voice": "en-IN-female",
+  "aspect_ratios": ["16:9", "9:16"],
+  "captions": {
+    "burn_in": true,
+    "srt": true
+  }
+}

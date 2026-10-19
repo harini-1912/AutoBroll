@@ -24,7 +24,10 @@ from app.schemas.job import (
     JobCreateRequest,
     JobResponse,
     JobStatus,
+    SceneClipReplacementRequest,
+    SceneClipReplacementResponse,
 )
+from app.services.scene_swapper import scene_swapper
 from app.storage import get_storage
 from app.workers.job_runner import job_runner
 
@@ -192,32 +195,43 @@ def get_job_manifest(job_id: str):
         )
     return manifest
 
+@router.put(
+    "/{job_id}/scenes/{scene_id}/clip",
+    status_code=status.HTTP_200_OK,
+    response_model=SceneClipReplacementResponse,
+    summary="Replace scene clip with selective re-rendering (MH-5)",
+)
+async def replace_scene_clip(
+    job_id: str,
+    scene_id: str,
+    swap_req: SceneClipReplacementRequest,
+):
+    """Replace a single scene's clip and selectively re-render final videos."""
+    result = await scene_swapper.replace_scene_clip(job_id, scene_id, swap_req)
+    return SceneClipReplacementResponse(**result)
+
+
 @router.post(
     "/{job_id}/scenes/{scene_id}/swap",
-    status_code=status.HTTP_202_ACCEPTED,
-    summary="Swap a scene clip with fast partial re-render",
+    status_code=status.HTTP_200_OK,
+    response_model=SceneClipReplacementResponse,
+    summary="Swap a scene clip with fast selective re-render (Backwards compatible)",
 )
-def swap_scene_clip(job_id: str, scene_id: str, swap_req: ClipSwapRequest):
-    """Replace a single scene's clip and trigger fast partial re-render."""
-    job_record = db.get_job(job_id)
-    if not job_record:
-        raise JobNotFoundError(job_id)
-
-    timeline = job_record.get("timeline")
-    if not timeline or "scenes" not in timeline:
-        raise SceneNotFoundError(scene_id, job_id)
-
-    # Check that scene exists
-    scene_found = any(s.get("scene_id") == scene_id for s in timeline["scenes"])
-    if not scene_found:
-        raise SceneNotFoundError(scene_id, job_id)
-
-    return {
-        "job_id": job_id,
-        "scene_id": scene_id,
-        "status": "queued",
-        "message": f"Clip swap queued for scene {scene_id}. Only affected scene will be re-rendered.",
-    }
+async def swap_scene_clip(
+    job_id: str,
+    scene_id: str,
+    swap_req: ClipSwapRequest,
+):
+    """Backwards-compatible endpoint to replace a single scene's clip."""
+    replacement_req = SceneClipReplacementRequest(
+        clip_id=swap_req.clip_id,
+        query_override=swap_req.query_override,
+        search_description=swap_req.search_description,
+        provider_override=swap_req.provider_override,
+        video_url=swap_req.video_url,
+    )
+    result = await scene_swapper.replace_scene_clip(job_id, scene_id, replacement_req)
+    return SceneClipReplacementResponse(**result)
 
 @router.get(
     "/download/{job_id}/{filename}",

@@ -196,5 +196,49 @@ All settings are configured via environment variables with defaults:
 | `DATABASE_URL` | `sqlite:///./data/incubrix.db` | SQLite database path |
 | `MAX_CONCURRENT_JOBS` | `2` | Bounded worker concurrency limit |
 | `FOOTAGE_PRIMARY_PROVIDER`| `mock` | Primary stock provider (`pexels`, `pixabay`, `mock`) |
-| `TTS_PROVIDER` | `mock` | Narration TTS provider (`gtts`, `mock`) |
+| `TTS_PROVIDER` | `mock` | Narration TTS provider (`gtts` for real speech, `mock` for offline testing) |
+| `DEFAULT_VOICE` | `en-IN-female` | Default voice identifier for TTS |
 | `WEBHOOK_SIGNATURE_SECRET`| `incubrix_secret` | Secret for HMAC-SHA256 callback signing |
+
+---
+
+## 8. Text-to-Speech (TTS) Configuration & Operations
+
+IncuBrix supports both real speech synthesis via Google Text-to-Speech (`gtts`) and synthetic sine-wave waveforms (`mock`).
+
+### 1. Enabling Real TTS
+Set the environment variable in `.env`:
+```bash
+TTS_PROVIDER=gtts
+DEFAULT_VOICE="en-IN-female"
+```
+> [!IMPORTANT]
+> **Network Requirement**: `gTTS` connects to Google's public TTS endpoints. It requires active internet access from the host or container. No API credentials or keys are required.
+
+### 2. Enabling Mock TTS for Local / Offline Development
+Set the environment variable in `.env`:
+```bash
+TTS_PROVIDER=mock
+```
+Mock TTS generates deterministic synthetic audio waveforms without internet access, enabling the entire test suite and development pipeline to operate in strictly offline environments.
+
+### 3. Supported Voices and Regional Accents
+Voices follow the standard `<lang>-<region>-<gender>` convention:
+- `en-IN-female` / `en-IN-male`: English (India accent, `co.in`)
+- `en-US-female` / `en-US-male`: English (US accent, `com`)
+- `en-GB-female` / `en-GB-male`: English (UK accent, `co.uk`)
+- `hi-IN-female` / `hi-IN-male`: Hindi
+- `ta-IN-female` / `ta-IN-male`: Tamil
+- `te-IN-female` / `te-IN-male`: Telugu
+
+### 4. Verifying Real Narration Output
+- **Application Logs**: Look for `GTTSProvider generated X.XXs audio (narration.wav) for N sentences`.
+- **Media Inspection**: Probe the resulting narration file or output video with `ffprobe` to verify audio tracks (`pcm_s16le` / `aac` at 24kHz/44.1kHz).
+- **Listening Verification**: Download the final video or audio file from `/api/v1/jobs/download/{job_id}/video_16_9.mp4` and listen to the natural spoken voiceover.
+
+### 5. Troubleshooting Network and Generation Failures
+If TTS fails during job execution:
+- **Error Code `TTS_GENERATION_FAILED` (HTTP 502 / retryable)**: Returned when Google TTS endpoints cannot be reached or socket connection fails.
+- **Check DNS & Outbound Connectivity**: Ensure outgoing HTTP/HTTPS connections are permitted by host firewalls or Docker container bridge networks.
+- **No Corrupt Files Left**: If synthesis fails midway, IncuBrix automatically purges any partial or temporary files to prevent corrupted video assembly.
+- **Empty Narration Validation**: If empty or blank text is submitted, IncuBrix raises `INVALID_INPUT` / `ValueError` before calling external providers.

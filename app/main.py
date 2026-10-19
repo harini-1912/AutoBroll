@@ -132,6 +132,7 @@ if static_dir.exists():
     app.mount("/static", StaticFiles(directory="static"), name="static")
 
 @app.get("/", response_class=HTMLResponse, include_in_schema=False)
+@app.get("/ui", response_class=HTMLResponse, include_in_schema=False)
 def root_ui():
     index_file = Path("static/index.html")
     if index_file.exists():

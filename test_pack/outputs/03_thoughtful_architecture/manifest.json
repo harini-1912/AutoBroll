@@ -1,0 +1,93 @@
+{
+  "job_id": "batch-1792403340509-03_thoughtful_architectu",
+  "created_at": "2026-10-19T09:49:00.509640+00:00",
+  "started_at": "2026-10-19T09:49:00.536092+00:00",
+  "completed_at": "2026-10-19T09:49:38.993257+00:00",
+  "total_processing_time_seconds": 38.457,
+  "seed": 42,
+  "settings": {
+    "script": "Clean code requires continuous care and disciplined execution. Thoughtful architecture prevents costly refactoring later.",
+    "voice": "en-IN-female",
+    "aspect_ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "captions": {
+      "burn_in": true,
+      "srt": true
+    }
+  },
+  "models_and_providers": [
+    {
+      "name": "gtts",
+      "version": "1.0",
+      "purpose": "TTS Synthesis"
+    },
+    {
+      "name": "pixabay",
+      "version": "1.0",
+      "purpose": "Primary Footage Search"
+    }
+  ],
+  "timings": {
+    "validation": 0.001,
+    "ingestion": 0.001,
+    "speech": 1.193,
+    "segmentation": 0.002,
+    "footage_search": 13.888,
+    "timeline": 0.024,
+    "captions": 0.005,
+    "rendering": 23.214,
+    "output_validation": 0.126
+  },
+  "cost_estimate": {
+    "footage_usd": 0.0,
+    "tts_usd": 0.001,
+    "compute_usd": 0.01923,
+    "total_usd": 0.02023
+  },
+  "warnings": [],
+  "licence_and_rights": {
+    "commercial_use_cleared": true,
+    "all_clips_licensed": true,
+    "contains_real_stock_footage": true,
+    "contains_ai_media": false
+  },
+  "narration_alignment": {
+    "primary_method": "tts_timestamps",
+    "average_confidence": 0.95,
+    "scene_count": 2,
+    "total_duration": 8.83
+  },
+  "outputs": {
+    "video_16_9": {
+      "aspect_ratio": "16:9",
+      "resolution": "1920x1080",
+      "fps": 30.0,
+      "codec": "h264",
+      "audio_codec": "aac",
+      "file_size_bytes": 2537441,
+      "duration_seconds": 8.83,
+      "url": "http://localhost:8000/api/v1/jobs/download/batch-1792403340509-03_thoughtful_architectu/video_16_9.mp4"
+    },
+    "video_9_16": {
+      "aspect_ratio": "9:16",
+      "resolution": "1080x1920",
+      "fps": 30.0,
+      "codec": "h264",
+      "audio_codec": "aac",
+      "file_size_bytes": 2371065,
+      "duration_seconds": 8.83,
+      "url": "http://localhost:8000/api/v1/jobs/download/batch-1792403340509-03_thoughtful_architectu/video_9_16.mp4"
+    }
+  },
+  "validation_results": {
+    "integrity_check": "passed",
+    "aspect_ratios_rendered": [
+      "16:9",
+      "9:16"
+    ],
+    "no_black_frames": true,
+    "no_audio_drift": true
+  }
+}

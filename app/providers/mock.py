@@ -1,45 +1,78 @@
 """Deterministic Mock Providers for no-key testing."""
 import math
+import re
 import struct
 import wave
 from pathlib import Path
-from typing import List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 from app.core.logging import logger
 from app.providers.base import BaseFootageProvider, BaseTTSProvider, FootageCandidate
 
 class MockTTSProvider(BaseTTSProvider):
-    """Generates synthetic spoken audio waveforms using standard library wave module."""
+    """Generates synthetic spoken audio waveforms with sentence timestamps and inter-sentence pauses."""
 
-    def synthesize(self, text: str, voice: str, output_path: str) -> float:
+    def __init__(self):
+        self.last_timestamps: List[Dict[str, Any]] = []
+
+    def synthesize_with_timestamps(self, text: str, voice: str, output_path: str) -> Tuple[float, List[Dict[str, Any]]]:
         Path(output_path).parent.mkdir(parents=True, exist_ok=True)
-        # Estimate duration: ~150 words per minute -> 2.5 words per second
-        words = text.split()
-        duration = max(1.5, len(words) * 0.4)
+        sentences = [s.strip() for s in re.split(r"[.!?]+", text) if s.strip()]
+        if not sentences:
+            sentences = [text.strip() or "Default narration."]
 
-        # Generate a gentle pure audio tone (440Hz / 880Hz) to represent speech
         sample_rate = 24000
-        total_samples = int(sample_rate * duration)
         freq = 300.0 if "male" in voice else 440.0
+        pause_samples = int(sample_rate * 0.3)  # 300ms natural pause between sentences
+
+        all_frames = bytearray()
+        timestamps: List[Dict[str, Any]] = []
+        curr_time = 0.0
+
+        for idx, sentence in enumerate(sentences):
+            words = sentence.split()
+            sentence_dur = max(1.0, round(len(words) * 0.45, 2))
+            st = round(curr_time, 2)
+            et = round(st + sentence_dur, 2)
+
+            num_speech_samples = int(sample_rate * sentence_dur)
+            for i in range(num_speech_samples):
+                t = float(i) / sample_rate
+                envelope = min(1.0, i / 2400.0) * min(1.0, (num_speech_samples - i) / 2400.0)
+                val = int(envelope * 16000.0 * (0.6 * math.sin(2 * math.pi * freq * t) + 0.4 * math.sin(2 * math.pi * (freq * 1.5) * t)))
+                all_frames.extend(struct.pack("<h", val))
+
+            timestamps.append({
+                "text": sentence,
+                "start_time": st,
+                "end_time": et,
+                "duration": round(et - st, 2),
+                "method": "tts_timestamps",
+                "confidence": 0.95,
+            })
+            curr_time = et
+
+            if idx < len(sentences) - 1:
+                all_frames.extend(b"\x00\x00" * pause_samples)
+                curr_time = round(curr_time + 0.3, 2)
+
+        total_duration = round(len(all_frames) / (sample_rate * 2), 2)
+        if timestamps:
+            timestamps[-1]["end_time"] = total_duration
+            timestamps[-1]["duration"] = round(total_duration - timestamps[-1]["start_time"], 2)
 
         with wave.open(output_path, "wb") as wav_file:
             wav_file.setnchannels(1)  # Mono
             wav_file.setsampwidth(2)  # 16-bit
             wav_file.setframerate(sample_rate)
+            wav_file.writeframes(all_frames)
 
-            # Generate audio data with fade in/out envelope
-            frames = bytearray()
-            for i in range(total_samples):
-                t = float(i) / sample_rate
-                # Envelope: avoid clicks at start/end
-                envelope = min(1.0, i / 2400.0) * min(1.0, (total_samples - i) / 2400.0)
-                # Modulated voice-like harmonic
-                val = int(envelope * 16000.0 * (0.6 * math.sin(2 * math.pi * freq * t) + 0.4 * math.sin(2 * math.pi * (freq * 1.5) * t)))
-                frames.extend(struct.pack("<h", val))
+        self.last_timestamps = timestamps
+        logger.info("MockTTS generated %.2fs audio with %d sentence timestamps for '%s'", total_duration, len(timestamps), text[:30])
+        return total_duration, timestamps
 
-            wav_file.writeframes(frames)
-
-        logger.info("MockTTS generated %.2fs audio for text '%s'", duration, text[:30])
-        return duration
+    def synthesize(self, text: str, voice: str, output_path: str) -> float:
+        dur, _ = self.synthesize_with_timestamps(text, voice, output_path)
+        return dur
 
 class MockFootageProvider(BaseFootageProvider):
     """Provides deterministic commercial-clean mock footage candidates."""
@@ -60,6 +93,7 @@ class MockFootageProvider(BaseFootageProvider):
                 height=1080,
                 fps=30.0,
                 tags=["business", "office", "team", "growth", "value", "finance"],
+                is_real_footage=False,
             ),
             FootageCandidate(
                 clip_id="mock_clip_002",
@@ -74,6 +108,7 @@ class MockFootageProvider(BaseFootageProvider):
                 height=1080,
                 fps=30.0,
                 tags=["technology", "code", "cloud", "server", "python", "developer"],
+                is_real_footage=False,
             ),
             FootageCandidate(
                 clip_id="mock_clip_003",
@@ -88,6 +123,7 @@ class MockFootageProvider(BaseFootageProvider):
                 height=1080,
                 fps=30.0,
                 tags=["nature", "landscape", "calm", "trust", "sky", "outdoor"],
+                is_real_footage=False,
             ),
             FootageCandidate(
                 clip_id="mock_clip_004",
@@ -102,6 +138,7 @@ class MockFootageProvider(BaseFootageProvider):
                 height=1080,
                 fps=30.0,
                 tags=["abstract", "concept", "futuristic", "particles", "art"],
+                is_real_footage=False,
             ),
         ]
 

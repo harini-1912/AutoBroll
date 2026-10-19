@@ -1,12 +1,22 @@
 """Base Provider Interfaces."""
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 class BaseTTSProvider(ABC):
     @abstractmethod
     def synthesize(self, text: str, voice: str, output_path: str) -> float:
         """Synthesize text into audio file at output_path. Return audio duration in seconds."""
         pass
+
+    def synthesize_with_timestamps(
+        self,
+        text: str,
+        voice: str,
+        output_path: str,
+    ) -> Tuple[float, List[Dict[str, Any]]]:
+        """Synthesize text into audio file and return (duration, timestamps) if supported."""
+        dur = self.synthesize(text, voice, output_path)
+        return dur, []
 
 class FootageCandidate:
     def __init__(
@@ -24,6 +34,7 @@ class FootageCandidate:
         fps: float,
         tags: List[str],
         thumbnail_url: Optional[str] = None,
+        is_real_footage: bool = True,
     ):
         self.clip_id = clip_id
         self.provider = provider
@@ -38,6 +49,7 @@ class FootageCandidate:
         self.fps = fps
         self.tags = tags
         self.thumbnail_url = thumbnail_url
+        self.is_real_footage = is_real_footage
 
 class BaseFootageProvider(ABC):
     @abstractmethod

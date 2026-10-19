@@ -29,5 +29,6 @@ class JobManifest(BaseModel):
     cost_estimate: Dict[str, float]  # footage, tts, compute, total USD
     warnings: List[str] = Field(default_factory=list)
     licence_and_rights: Dict[str, Any]
+    narration_alignment: Optional[Dict[str, Any]] = None
     outputs: Dict[str, VideoOutputInfo]
     validation_results: Dict[str, Any]

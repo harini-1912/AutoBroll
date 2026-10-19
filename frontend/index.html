@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>IncuBrix | Script & Voiceover to B-Roll Video Engine</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <!-- React 18 and Babel CDN -->
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <style>
+    :root {
+      --bg: #090d16;
+      --card-bg: rgba(22, 28, 45, 0.75);
+      --card-border: rgba(255, 255, 255, 0.08);
+      --accent: #6366f1;
+      --accent-hover: #4f46e5;
+      --accent-gradient: linear-gradient(135deg, #6366f1 0%, #a855f7 100%);
+      --text: #f8fafc;
+      --text-muted: #94a3b8;
+      --success: #10b981;
+      --warning: #f59e0b;
+      --danger: #ef4444;
+      --radius: 12px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background-color: var(--bg);
+      background-image: radial-gradient(at 0% 0%, rgba(99, 102, 241, 0.15) 0px, transparent 50%),
+                        radial-gradient(at 100% 100%, rgba(168, 85, 247, 0.12) 0px, transparent 50%);
+      color: var(--text);
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      min-height: 100vh;
+      padding: 2rem 1rem;
+    }
+    .container { max-width: 1080px; margin: 0 auto; }
+    header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem; }
+    .brand { display: flex; align-items: center; gap: 0.75rem; }
+    .brand-logo {
+      width: 42px; height: 42px; border-radius: 10px;
+      background: var(--accent-gradient);
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 700; font-size: 1.25rem; color: #fff;
+      box-shadow: 0 4px 20px rgba(99, 102, 241, 0.35);
+    }
+    .brand h1 { font-size: 1.35rem; font-weight: 700; letter-spacing: -0.02em; }
+    .badge {
+      display: inline-block; padding: 0.25rem 0.6rem; border-radius: 9999px;
+      font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;
+    }
+    .badge-queued { background: rgba(148, 163, 184, 0.2); color: #cbd5e1; }
+    .badge-processing { background: rgba(99, 102, 241, 0.2); color: #818cf8; animation: pulse 1.5s infinite; }
+    .badge-completed { background: rgba(16, 185, 129, 0.2); color: #34d399; }
+    .badge-failed { background: rgba(239, 68, 68, 0.2); color: #f87171; }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }
+
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
+    @media (max-width: 860px) { .grid { grid-template-columns: 1fr; } }
+
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      backdrop-filter: blur(16px);
+      border-radius: var(--radius);
+      padding: 1.75rem;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    }
+    .card h2 { font-size: 1.15rem; font-weight: 600; margin-bottom: 1.25rem; }
+
+    .tab-group { display: flex; gap: 0.5rem; background: rgba(0,0,0,0.25); padding: 0.25rem; border-radius: 8px; margin-bottom: 1.25rem; }
+    .tab-btn {
+      flex: 1; padding: 0.5rem 0.75rem; border: none; background: transparent;
+      color: var(--text-muted); font-size: 0.85rem; font-weight: 500; border-radius: 6px; cursor: pointer;
+      transition: all 0.2s;
+    }
+    .tab-btn.active { background: var(--accent); color: #fff; }
+
+    .form-group { margin-bottom: 1.15rem; }
+    label { display: block; font-size: 0.85rem; font-weight: 500; color: var(--text-muted); margin-bottom: 0.4rem; }
+    input[type="text"], textarea, select {
+      width: 100%; padding: 0.75rem; border-radius: 8px;
+      background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(255, 255, 255, 0.1);
+      color: var(--text); font-family: inherit; font-size: 0.9rem;
+      transition: border 0.2s;
+    }
+    input[type="text"]:focus, textarea:focus, select:focus {
+      outline: none; border-color: var(--accent); box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.25);
+    }
+    textarea { resize: vertical; min-height: 100px; }
+
+    .checkbox-group { display: flex; gap: 1rem; margin-top: 0.4rem; }
+    .checkbox-label { display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem; cursor: pointer; color: var(--text); }
+
+    .btn-submit {
+      width: 100%; padding: 0.85rem; border-radius: 8px; border: none;
+      background: var(--accent-gradient); color: #fff; font-size: 0.95rem; font-weight: 600;
+      cursor: pointer; transition: opacity 0.2s, transform 0.1s;
+      box-shadow: 0 4px 15px rgba(99, 102, 241, 0.35);
+    }
+    .btn-submit:hover:not(:disabled) { opacity: 0.95; transform: translateY(-1px); }
+    .btn-submit:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    /* Progress & Tracker */
+    .progress-track {
+      width: 100%; height: 8px; background: rgba(255, 255, 255, 0.08); border-radius: 9999px;
+      overflow: hidden; margin: 1rem 0 0.5rem;
+    }
+    .progress-bar {
+      height: 100%; background: var(--accent-gradient); border-radius: 9999px;
+      transition: width 0.4s ease;
+    }
+    .stage-pill {
+      display: inline-flex; align-items: center; gap: 0.4rem; padding: 0.3rem 0.75rem;
+      border-radius: 6px; background: rgba(99, 102, 241, 0.15); color: #a5b4fc;
+      font-size: 0.8rem; font-family: 'JetBrains Mono', monospace;
+    }
+
+    .output-item {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 0.75rem 1rem; background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.06); border-radius: 8px; margin-bottom: 0.6rem;
+    }
+    .output-link {
+      color: #818cf8; text-decoration: none; font-weight: 500; font-size: 0.85rem;
+      display: inline-flex; align-items: center; gap: 0.3rem;
+    }
+    .output-link:hover { text-decoration: underline; }
+
+    .error-box {
+      background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.3);
+      color: #fca5a5; padding: 1rem; border-radius: 8px; margin-top: 1rem; font-size: 0.85rem;
+    }
+    .warning-box {
+      background: rgba(245, 158, 11, 0.15); border: 1px solid rgba(245, 158, 11, 0.3);
+      color: #fde68a; padding: 0.75rem 1rem; border-radius: 8px; margin-top: 0.75rem; font-size: 0.85rem;
+    }
+    pre.code-viewer {
+      background: #050811; border: 1px solid rgba(255, 255, 255, 0.06);
+      padding: 1rem; border-radius: 8px; font-family: 'JetBrains Mono', monospace;
+      font-size: 0.8rem; max-height: 250px; overflow-y: auto; color: #cbd5e1;
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect, useRef } = React;
+
+    function App() {
+      const [inputMode, setInputMode] = useState('script'); // 'script', 'scenes', 'audio'
+      const [script, setScript] = useState('A creator records a sixty-second voiceover about saving money and investing with patience. Financial freedom requires discipline and smart planning.');
+      const [scenesText, setScenesText] = useState(JSON.stringify([
+        {"text": "A creator records a voiceover about saving money.", "visual_hint": "piggy bank or digital finance dashboard"},
+        {"text": "Financial freedom requires discipline and smart planning.", "visual_hint": "stock chart growth and team meeting"}
+      ], null, 2));
+      const [audioUrl, setAudioUrl] = useState('https://images.incubrix.test/audio/sample_voiceover.mp3');
+      const [voice, setVoice] = useState('en-IN-female');
+      const [aspectRatios, setAspectRatios] = useState(['16:9', '9:16']);
+      const [style, setStyle] = useState('bright, modern, real-world footage');
+      const [avoid, setAvoid] = useState("people's faces, alcohol");
+
+      const [loading, setLoading] = useState(false);
+      const [activeJobId, setActiveJobId] = useState(null);
+      const [jobStatus, setJobStatus] = useState(null);
+      const [activeModal, setActiveModal] = useState(null);
+      const [modalData, setModalData] = useState(null);
+
+      const pollingTimerRef = useRef(null);
+
+      // Handle Aspect Ratio Toggle
+      const toggleRatio = (ratio) => {
+        if (aspectRatios.includes(ratio)) {
+          if (aspectRatios.length > 1) {
+            setAspectRatios(aspectRatios.filter(r => r !== ratio));
+          }
+        } else {
+          setAspectRatios([...aspectRatios, ratio]);
+        }
+      };
+
+      // Submit Job
+      const handleSubmit = async (e) => {
+        e.preventDefault();
+        setLoading(true);
+        setJobStatus(null);
+        setActiveModal(null);
+
+        try {
+          const payload = {
+            voice,
+            aspect_ratios: aspectRatios,
+            style,
+            avoid: avoid.split(',').map(s => s.trim()).filter(Boolean),
+            captions: { burn_in: true, srt: true }
+          };
+
+          if (inputMode === 'script') {
+            payload.script = script;
+          } else if (inputMode === 'scenes') {
+            payload.scenes = JSON.parse(scenesText);
+          } else {
+            payload.audio_url = audioUrl;
+          }
+
+          const idempKey = 'ui-' + Date.now() + '-' + Math.random().toString(36).substring(2, 8);
+          const res = await fetch('/api/v1/broll/jobs', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Idempotency-Key': idempKey
+            },
+            body: JSON.stringify(payload)
+          });
+
+          const data = await res.json();
+          if (!res.ok) {
+            throw new Error(data.error?.message || 'Failed to create job');
+          }
+
+          setActiveJobId(data.job_id);
+          setJobStatus(data);
+        } catch (err) {
+          alert('Submission error: ' + err.message);
+        } finally {
+          setLoading(false);
+        }
+      };
+
+      // Polling Effect
+      useEffect(() => {
+        if (!activeJobId) return;
+
+        const checkStatus = async () => {
+          try {
+            const res = await fetch(`/api/v1/broll/jobs/${activeJobId}`);
+            if (res.ok) {
+              const data = await res.json();
+              setJobStatus(data);
+              // Stop polling if completed or failed
+              if (['completed', 'succeeded', 'failed'].includes(data.status)) {
+                if (pollingTimerRef.current) {
+                  clearInterval(pollingTimerRef.current);
+                  pollingTimerRef.current = null;
+                }
+              }
+            }
+          } catch (err) {
+            console.error('Polling error:', err);
+          }
+        };
+
+        // Poll immediately and setup interval
+        checkStatus();
+        pollingTimerRef.current = setInterval(checkStatus, 1500);
+
+        return () => {
+          if (pollingTimerRef.current) {
+            clearInterval(pollingTimerRef.current);
+            pollingTimerRef.current = null;
+          }
+        };
+      }, [activeJobId]);
+
+      // View Metadata Modal
+      const viewMetadata = async (type) => {
+        if (!activeJobId) return;
+        try {
+          const res = await fetch(`/api/v1/broll/jobs/${activeJobId}/${type}`);
+          const json = await res.json();
+          setModalData(json);
+          setActiveModal(type);
+        } catch (err) {
+          alert(`Failed to load ${type}: ` + err.message);
+        }
+      };
+
+      return (
+        <div className="container">
+          <header>
+            <div className="brand">
+              <div className="brand-logo">IB</div>
+              <div>
+                <h1>IncuBrix Video Engine</h1>
+                <p style={{fontSize: '0.8rem', color: '#94a3b8'}}>Script & Voiceover to B-Roll Video Pipeline</p>
+              </div>
+            </div>
+            <div style={{display: 'flex', gap: '0.75rem'}}>
+              <a href="/docs" target="_blank" className="badge" style={{background: 'rgba(255,255,255,0.08)', color: '#fff', textDecoration: 'none'}}>API Docs</a>
+              <a href="/openapi.yaml" target="_blank" className="badge" style={{background: 'rgba(255,255,255,0.08)', color: '#fff', textDecoration: 'none'}}>OpenAPI 3.1</a>
+            </div>
+          </header>
+
+          <div className="grid">
+            {/* Input Card */}
+            <div className="card">
+              <h2>1. Configure Video Job</h2>
+              <div className="tab-group">
+                <button type="button" className={`tab-btn ${inputMode === 'script' ? 'active' : ''}`} onClick={() => setInputMode('script')}>Plain Script</button>
+                <button type="button" className={`tab-btn ${inputMode === 'scenes' ? 'active' : ''}`} onClick={() => setInputMode('scenes')}>IncuBrix Scenes</button>
+                <button type="button" className={`tab-btn ${inputMode === 'audio' ? 'active' : ''}`} onClick={() => setInputMode('audio')}>Audio URL</button>
+              </div>
+
+              <form onSubmit={handleSubmit}>
+                {inputMode === 'script' && (
+                  <div className="form-group">
+                    <label>Narration Script</label>
+                    <textarea rows="4" value={script} onChange={e => setScript(e.target.value)} required placeholder="Enter voiceover script..." />
+                  </div>
+                )}
+
+                {inputMode === 'scenes' && (
+                  <div className="form-group">
+                    <label>IncuBrix Scene List (JSON array)</label>
+                    <textarea rows="5" value={scenesText} onChange={e => setScenesText(e.target.value)} required style={{fontFamily: 'monospace', fontSize: '0.8rem'}} />
+                  </div>
+                )}
+
+                {inputMode === 'audio' && (
+                  <div className="form-group">
+                    <label>Voiceover Audio URL (.mp3 / .wav / .m4a)</label>
+                    <input type="text" value={audioUrl} onChange={e => setAudioUrl(e.target.value)} required placeholder="https://..." />
+                  </div>
+                )}
+
+                <div className="form-group">
+                  <label>Narration Voice</label>
+                  <select value={voice} onChange={e => setVoice(e.target.value)}>
+                    <option value="en-IN-female">en-IN-female (Indian English)</option>
+                    <option value="en-US-male">en-US-male (American English)</option>
+                    <option value="hi-IN-female">hi-IN-female (Hindi)</option>
+                    <option value="ta-IN-female">ta-IN-female (Tamil)</option>
+                  </select>
+                </div>
+
+                <div className="form-group">
+                  <label>Aspect Ratios</label>
+                  <div className="checkbox-group">
+                    {['16:9', '9:16', '1:1'].map(r => (
+                      <label key={r} className="checkbox-label">
+                        <input type="checkbox" checked={aspectRatios.includes(r)} onChange={() => toggleRatio(r)} />
+                        {r}
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="form-group">
+                  <label>Visual Style Prompt</label>
+                  <input type="text" value={style} onChange={e => setStyle(e.target.value)} />
+                </div>
+
+                <div className="form-group">
+                  <label>Avoid Content (comma separated)</label>
+                  <input type="text" value={avoid} onChange={e => setAvoid(e.target.value)} />
+                </div>
+
+                <button type="submit" className="btn-submit" disabled={loading}>
+                  {loading ? 'Creating Job...' : 'Generate B-Roll Video'}
+                </button>
+              </form>
+            </div>
+
+            {/* Status & Output Card */}
+            <div className="card">
+              <h2>2. Job Status & Real-time Progress</h2>
+              {!jobStatus ? (
+                <div style={{color: '#64748b', fontSize: '0.9rem', textAlign: 'center', padding: '3rem 1rem'}}>
+                  Submit a job on the left to start background generation.
+                </div>
+              ) : (
+                <div>
+                  <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem'}}>
+                    <span style={{fontSize: '0.8rem', color: '#94a3b8'}}>Job ID: <code style={{color: '#fff'}}>{jobStatus.job_id.substring(0, 16)}...</code></span>
+                    <span className={`badge badge-${jobStatus.status}`}>{jobStatus.status}</span>
+                  </div>
+
+                  <div className="progress-track">
+                    <div className="progress-bar" style={{width: `${jobStatus.progress}%`}} />
+                  </div>
+
+                  <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.8rem', marginBottom: '1.25rem'}}>
+                    <span className="stage-pill">Stage: {jobStatus.stage}</span>
+                    <span style={{fontWeight: 600, color: '#a5b4fc'}}>{jobStatus.progress}%</span>
+                  </div>
+
+                  {jobStatus.warnings && jobStatus.warnings.length > 0 && (
+                    <div className="warning-box">
+                      <strong>Warnings:</strong>
+                      <ul style={{marginLeft: '1.25rem', marginTop: '0.25rem'}}>
+                        {jobStatus.warnings.map((w, i) => <li key={i}>{w}</li>)}
+                      </ul>
+                    </div>
+                  )}
+
+                  {jobStatus.error && (
+                    <div className="error-box">
+                      <strong>Error [{jobStatus.error.code}]:</strong> {jobStatus.error.message}
+                    </div>
+                  )}
+
+                  {/* Outputs Available */}
+                  <h3 style={{fontSize: '0.95rem', fontWeight: 600, marginTop: '1.5rem', marginBottom: '0.75rem'}}>Generated Outputs</h3>
+                  {jobStatus.result_urls ? (
+                    <div>
+                      {Object.entries(jobStatus.result_urls).map(([key, url]) => {
+                        const isReady = jobStatus.outputs_available ? jobStatus.outputs_available[key] : true;
+                        return (
+                          <div key={key} className="output-item">
+                            <span style={{fontSize: '0.85rem', color: '#cbd5e1'}}>{key}</span>
+                            {isReady ? (
+                              <a href={url} target="_blank" className="output-link">Download ↓</a>
+                            ) : (
+                              <span style={{fontSize: '0.75rem', color: '#64748b'}}>Rendering...</span>
+                            )}
+                          </div>
+                        );
+                      })}
+
+                      <div style={{display: 'flex', gap: '0.5rem', marginTop: '1rem'}}>
+                        <button type="button" onClick={() => viewMetadata('timeline')} className="tab-btn active" style={{fontSize: '0.8rem'}}>View timeline.json</button>
+                        <button type="button" onClick={() => viewMetadata('manifest')} className="tab-btn active" style={{fontSize: '0.8rem'}}>View manifest.json</button>
+                      </div>
+                    </div>
+                  ) : (
+                    <p style={{fontSize: '0.85rem', color: '#64748b'}}>Outputs will appear here upon completion.</p>
+                  )}
+                </div>
+              )}
+
+              {/* Modal Viewer */}
+              {activeModal && modalData && (
+                <div style={{marginTop: '1.5rem'}}>
+                  <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem'}}>
+                    <h3 style={{fontSize: '0.85rem', color: '#818cf8'}}>{activeModal}.json Viewer</h3>
+                    <button type="button" onClick={() => setActiveModal(null)} style={{background: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer'}}>Close ✕</button>
+                  </div>
+                  <pre className="code-viewer">{JSON.stringify(modalData, null, 2)}</pre>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>
