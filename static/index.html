@@ -382,10 +382,20 @@
 
     function App() {
       const [inputMode, setInputMode] = useState('script'); // 'script', 'scenes', 'audio'
-      const [script, setScript] = useState('A creator records a sixty-second voiceover about saving money and investing with patience. Financial freedom requires discipline and smart planning.');
+      const [script, setScript] = useState('Artificial intelligence is transforming how ideas come to life. In seconds, complex concepts turn into visual stories. The future belongs to creators who build alongside intelligent tools.');
       const [scenesText, setScenesText] = useState(JSON.stringify([
-        {"text": "A creator records a voiceover about saving money.", "visual_hint": "piggy bank or digital finance dashboard"},
-        {"text": "Financial freedom requires discipline and smart planning.", "visual_hint": "stock chart growth and team meeting"}
+        {
+          "text": "Artificial intelligence is transforming how ideas come to life.",
+          "visual_hint": "futuristic neural network glow data flow modern technology"
+        },
+        {
+          "text": "In seconds, complex concepts turn into visual stories.",
+          "visual_hint": "digital video timeline fast editing modern creative studio"
+        },
+        {
+          "text": "The future belongs to creators who build alongside intelligent tools.",
+          "visual_hint": "engineer programmer working on dual monitors illuminated modern desk"
+        }
       ], null, 2));
       const [audioUrl, setAudioUrl] = useState('');
       const [audioTranscript, setAudioTranscript] = useState('');

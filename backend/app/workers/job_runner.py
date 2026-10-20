@@ -361,6 +361,8 @@ class JobRunner:
                     DEFAULT_SAMPLE_PHRASES = [
                         "a creator records a sixty-second voiceover",
                         "creator records a sixty-second voiceover",
+                        "artificial intelligence is transforming how ideas come to life",
+                        "how ideas come to life",
                     ]
                     is_dummy_template = bool(
                         script and any(phrase in script.lower() for phrase in DEFAULT_SAMPLE_PHRASES)
