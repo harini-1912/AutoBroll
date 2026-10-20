@@ -198,7 +198,7 @@ class FFmpegEngine:
                 self.ffmpeg_path,
                 "-y",
                 "-threads",
-                str(getattr(settings, "FFMPEG_THREADS", 2)),
+                str(getattr(settings, "FFMPEG_THREADS", 1)),
                 "-stream_loop",
                 "-1",
                 "-i",
@@ -219,6 +219,12 @@ class FFmpegEngine:
                 "yuv420p",
                 "-r",
                 "30",
+                "-max_muxing_queue_size",
+                "512",
+                "-bufsize",
+                "2M",
+                "-maxrate",
+                "4M",
                 "-an",
                 str(output_path),
             ]
@@ -264,7 +270,7 @@ class FFmpegEngine:
             self.ffmpeg_path,
             "-y",
             "-threads",
-            str(getattr(settings, "FFMPEG_THREADS", 2)),
+            str(getattr(settings, "FFMPEG_THREADS", 1)),
             "-f",
             "lavfi",
             "-i",
@@ -279,6 +285,8 @@ class FFmpegEngine:
             "yuv420p",
             "-r",
             "30",
+            "-max_muxing_queue_size",
+            "512",
             str(output_path),
         ]
 
@@ -297,7 +305,7 @@ class FFmpegEngine:
             self.ffmpeg_path,
             "-y",
             "-threads",
-            str(getattr(settings, "FFMPEG_THREADS", 2)),
+            str(getattr(settings, "FFMPEG_THREADS", 1)),
             "-f",
             "lavfi",
             "-i",
@@ -310,6 +318,8 @@ class FFmpegEngine:
             "yuv420p",
             "-r",
             "30",
+            "-max_muxing_queue_size",
+            "512",
             str(output_path),
         ]
         try:
@@ -401,7 +411,9 @@ class FFmpegEngine:
             self.ffmpeg_path,
             "-y",
             "-threads",
-            str(getattr(settings, "FFMPEG_THREADS", 2)),
+            str(getattr(settings, "FFMPEG_THREADS", 1)),
+            "-max_muxing_queue_size",
+            "512",
             "-f",
             "concat",
             "-safe",
@@ -440,19 +452,19 @@ class FFmpegEngine:
         if should_burn:
             if aspect_ratio == "9:16":
                 force_style = (
-                    "FontName=Arial,FontSize=15,Bold=1,"
+                    "FontName=DejaVu Sans,Arial,sans-serif,FontSize=15,Bold=1,"
                     "PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,BackColour=&H80000000,"
                     "BorderStyle=1,Outline=2,Shadow=1,Alignment=2,MarginV=40,MarginL=25,MarginR=25"
                 )
             elif aspect_ratio == "1:1":
                 force_style = (
-                    "FontName=Arial,FontSize=15,Bold=1,"
+                    "FontName=DejaVu Sans,Arial,sans-serif,FontSize=15,Bold=1,"
                     "PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,BackColour=&H80000000,"
                     "BorderStyle=1,Outline=2,Shadow=1,Alignment=2,MarginV=30,MarginL=25,MarginR=25"
                 )
             else:
                 force_style = (
-                    "FontName=Arial,FontSize=16,Bold=1,"
+                    "FontName=DejaVu Sans,Arial,sans-serif,FontSize=16,Bold=1,"
                     "PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,BackColour=&H80000000,"
                     "BorderStyle=1,Outline=2,Shadow=1,Alignment=2,MarginV=25,MarginL=30,MarginR=30"
                 )
@@ -469,6 +481,10 @@ class FFmpegEngine:
                 "26",
                 "-tune",
                 "fastdecode",
+                "-bufsize",
+                "2M",
+                "-maxrate",
+                "4M",
                 "-pix_fmt",
                 "yuv420p",
                 "-r",
@@ -506,7 +522,9 @@ class FFmpegEngine:
                     self.ffmpeg_path,
                     "-y",
                     "-threads",
-                    str(getattr(settings, "FFMPEG_THREADS", 2)),
+                    str(getattr(settings, "FFMPEG_THREADS", 1)),
+                    "-max_muxing_queue_size",
+                    "512",
                     "-f",
                     "concat",
                     "-safe",

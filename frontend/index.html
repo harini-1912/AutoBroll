@@ -529,14 +529,46 @@
       useEffect(() => {
         if (!activeJobId) return;
 
+        let consecutiveErrors = 0;
+
         const checkStatus = async () => {
           try {
             const res = await fetch(`/api/v1/broll/jobs/${activeJobId}`);
             if (res.ok) {
               const data = await res.json();
               setJobStatus(data);
+              consecutiveErrors = 0;
               // Stop polling if completed or failed
               if (['completed', 'succeeded', 'failed'].includes(data.status)) {
+                if (pollingTimerRef.current) {
+                  clearInterval(pollingTimerRef.current);
+                  pollingTimerRef.current = null;
+                }
+              }
+            } else if (res.status === 502 || res.status === 503 || res.status === 504) {
+              consecutiveErrors += 1;
+              console.warn(`Server busy (${res.status}), retrying... attempt ${consecutiveErrors}`);
+              if (consecutiveErrors > 20) {
+                setJobStatus(prev => ({
+                  ...prev,
+                  status: 'failed',
+                  stage: 'cloud_timeout',
+                  error: 'Video rendering took longer than the cloud proxy timeout. Please retry with a shorter video or fewer aspect ratios.'
+                }));
+                if (pollingTimerRef.current) {
+                  clearInterval(pollingTimerRef.current);
+                  pollingTimerRef.current = null;
+                }
+              }
+            } else if (res.status === 404) {
+              consecutiveErrors += 1;
+              if (consecutiveErrors > 4) {
+                setJobStatus(prev => ({
+                  ...prev,
+                  status: 'failed',
+                  stage: 'not_found',
+                  error: 'Job session expired or server restarted. Please click Generate B-Roll Video to restart.'
+                }));
                 if (pollingTimerRef.current) {
                   clearInterval(pollingTimerRef.current);
                   pollingTimerRef.current = null;

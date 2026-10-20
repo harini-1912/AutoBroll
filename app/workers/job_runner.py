@@ -1,5 +1,6 @@
 """Background Job Worker Engine conforming to Integration Standard #3 & #7."""
 import asyncio
+import gc
 import json
 import os
 import re
@@ -660,6 +661,7 @@ class JobRunner:
             # Stage 8: Render Each Requested Aspect Ratio in Staging (85%)
             # -------------------------------------------------------------
             t0 = time.time()
+            gc.collect()
             db.update_job_progress(job_id, "processing", 85, "rendering")
             base_url = settings.BASE_URL.rstrip("/")
             result_urls: Dict[str, str] = {}
@@ -681,6 +683,7 @@ class JobRunner:
                 video_filename = f"video_{ratio_slug}.mp4"
                 video_path = staging_dir / video_filename
                 db.update_job_progress(job_id, "processing", min(90, 85 + r_idx * 3), f"rendering_{ratio_slug}")
+                gc.collect()
 
                 await asyncio.to_thread(
                     ffmpeg_engine.assemble_video,
@@ -707,6 +710,7 @@ class JobRunner:
                     "duration_seconds": probe_info.get("duration") or total_duration,
                     "url": result_urls[f"video_{ratio_slug}"],
                 }
+                gc.collect()
 
             result_urls["captions_srt"] = f"{base_url}/api/v1/jobs/download/{job_id}/captions.srt"
             result_urls["timeline_json"] = f"{base_url}/api/v1/jobs/download/{job_id}/timeline.json"

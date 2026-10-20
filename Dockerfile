@@ -1,11 +1,13 @@
 FROM python:3.11-slim
 
-# Install system dependencies: ffmpeg, curl, git, ca-certificates
+# Install system dependencies: ffmpeg, curl, git, ca-certificates, fonts for subtitle burn-in
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
     curl \
     git \
     ca-certificates \
+    fonts-dejavu-core \
+    fontconfig \
     && rm -rf /var/lib/apt/lists/*
 
 # Set up non-root user 'user' with UID 1000
@@ -33,7 +35,7 @@ USER user
 # Default environment variables optimized for free tiers (512MB RAM constraints)
 ENV HOME=/home/user \
     PORT=8000 \
-    FFMPEG_THREADS=2 \
+    FFMPEG_THREADS=1 \
     MAX_CONCURRENT_JOBS=1 \
     LOCAL_STORAGE_DIR=/home/user/app/artifacts \
     ARTIFACTS_DIR=/home/user/app/artifacts \

@@ -10,7 +10,7 @@ services:
       - key: PORT
         value: 10000
       - key: FFMPEG_THREADS
-        value: 2
+        value: 1
       - key: MAX_CONCURRENT_JOBS
         value: 1
       - key: TTS_PROVIDER
