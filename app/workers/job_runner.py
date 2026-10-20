@@ -44,7 +44,8 @@ class JobRunner:
     """Manages concurrent execution, retries, and fallbacks of video generation jobs."""
 
     def __init__(self, max_concurrent: int = 2, tts_provider: Optional[BaseTTSProvider] = None):
-        self.semaphore = asyncio.Semaphore(max_concurrent)
+        self._max_concurrent = max_concurrent
+        self._semaphore: Optional[asyncio.Semaphore] = None
         self.active_tasks: Dict[str, asyncio.Task] = {}
         self._custom_tts_provider: Optional[BaseTTSProvider] = tts_provider
         self._custom_primary_footage_provider: Optional[BaseFootageProvider] = None
@@ -52,6 +53,13 @@ class JobRunner:
 
         # Final fallback provider: Curated procedural AI motion / Mock
         self.fallback_ai_provider: BaseFootageProvider = MockFootageProvider("ai_generative_fallback")
+
+    @property
+    def semaphore(self) -> asyncio.Semaphore:
+        """Lazily initialize semaphore inside the active event loop."""
+        if self._semaphore is None:
+            self._semaphore = asyncio.Semaphore(self._max_concurrent)
+        return self._semaphore
 
     def _resolve_footage_providers(self) -> Tuple[BaseFootageProvider, BaseFootageProvider]:
         """Resolve primary and secondary footage providers based on configuration and available API keys."""
