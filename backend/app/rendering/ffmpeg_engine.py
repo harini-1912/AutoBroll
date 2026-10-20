@@ -186,7 +186,7 @@ class FFmpegEngine:
             raise RenderFailedError(f"FFmpeg binary not accessible at '{self.ffmpeg_path}'.")
 
         width, height = ASPECT_RATIO_DIMENSIONS.get(aspect_ratio, (854, 480))
-        duration = min(4.0, max(0.5, round(float(duration), 2)))
+        duration = max(0.5, round(float(duration), 2))
         color = SCENE_PALETTES[scene_index % len(SCENE_PALETTES)]
 
         output_path.parent.mkdir(parents=True, exist_ok=True)

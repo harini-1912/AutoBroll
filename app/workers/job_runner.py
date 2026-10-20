@@ -378,6 +378,13 @@ class JobRunner:
                                 script = transcribed_text
                         except Exception as e:
                             logger.warning("Audio transcription encountered an issue for job %s: %s", job_id, e)
+
+            # Accurately probe narration audio duration so video length matches audio track to the millisecond
+            if narration_audio_path.exists():
+                p_info = await asyncio.to_thread(probe_media, narration_audio_path)
+                if p_info.get("duration") and p_info["duration"] > 0:
+                    total_duration = float(p_info["duration"])
+
             timings["speech"] = round(time.time() - t0, 3)
 
             # -------------------------------------------------------------
@@ -414,9 +421,18 @@ class JobRunner:
                 audio_path=narration_audio_path if narration_audio_path.exists() else None,
                 tts_timestamps=tts_timestamps if tts_timestamps else None,
             )
-            # Optimize scene durations for fast 480p encoding (3-4s max per scene)
+            # Ensure each scene's duration precisely matches its aligned audio boundaries (end_time - start_time)
+            # so video cuts match audio sentence boundaries and no audio is ever truncated
             for sc in scenes_data:
-                sc["duration"] = round(min(4.0, max(1.5, float(sc.get("duration", 3.0)))), 2)
+                sc["duration"] = round(max(0.5, float(sc["end_time"]) - float(sc["start_time"])), 2)
+
+            # Ensure total duration of all scenes matches narration audio duration exactly
+            if scenes_data and total_duration > 0:
+                current_sum = sum(sc["duration"] for sc in scenes_data[:-1])
+                scenes_data[-1]["start_time"] = round(current_sum, 2)
+                scenes_data[-1]["end_time"] = round(total_duration, 2)
+                scenes_data[-1]["duration"] = max(0.5, round(total_duration - current_sum, 2))
+
             timings["segmentation"] = round(time.time() - t0, 3)
 
             # -------------------------------------------------------------
