@@ -40,15 +40,29 @@ htmlcov/
 *.key
 
 # Application Artifacts, Temporary Data & Caches
-artifacts/
-temp/
-tmp/
-data/
-storage/
+/artifacts/
+/temp/
+/tmp/
+/data/
+/storage/
 *.db
 *.sqlite
 *.sqlite3
 *.log
+
+# Explicitly ensure app packages are never ignored
+!app/
+!app/**/
+!app/storage/
+!app/storage/*.py
+!backend/app/storage/
+!backend/app/storage/*.py
+!app/**/__init__.py
+!backend/app/**/__init__.py
+
+# Re-enforce ignore of byte-compiled files everywhere
+__pycache__/
+*.py[cod]
 
 # Media & Rendered Assets
 *.mp4
