@@ -640,9 +640,15 @@
               body: JSON.stringify(body),
             }
           );
-          const data = await res.json();
+          let data = null;
+          const resText = await res.text();
+          try {
+            data = JSON.parse(resText);
+          } catch (_) {
+            data = null;
+          }
           if (!res.ok) {
-            const errMsg = data?.error?.message || `HTTP ${res.status}`;
+            const errMsg = data?.error?.message || data?.detail || `Server returned HTTP ${res.status}${resText ? ': ' + resText.slice(0, 160) : ''}`;
             setSwapMsg({ type: 'error', text: errMsg });
           } else {
             setSwapMsg({

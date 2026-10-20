@@ -235,22 +235,34 @@ async def fetch_video_from_url(url: str, output_path: Path) -> Path:
 
     downloaded_file: Optional[Path] = None
 
-    # Step A: Direct raw video file check
-    is_direct = await _is_direct_video_url(clean_url, parsed)
-    if is_direct:
+    # Step A: Direct stock site webpage check (Pixabay / Pexels)
+    # Fast resolution via official API avoids Cloudflare bot challenges and eliminates yt-dlp latency
+    domain = parsed.netloc.lower()
+    if "pixabay.com" in domain or "pexels.com" in domain:
         try:
-            logger.info("Attempting direct video stream download with spoofed browser headers: %s", clean_url[:80])
-            downloaded_file = await _download_direct_stream(clean_url, output_path)
-        except InvalidInputError as input_err:
-            if "exceeds maximum allowed size" in input_err.message:
-                raise
-            logger.warning("Direct video download indicated non-video (%s); falling back to yt-dlp: %s", input_err, clean_url[:80])
-            downloaded_file = None
-        except Exception as direct_err:
-            logger.warning("Direct video download failed (%s); falling back to yt-dlp: %s", direct_err, clean_url[:80])
-            downloaded_file = None
+            downloaded_file = await _resolve_stock_webpage_fallback(clean_url, parsed, output_path)
+            if downloaded_file:
+                logger.info("Directly resolved stock page via official API: %s", clean_url[:80])
+        except Exception as stock_err:
+            logger.warning("Stock webpage fallback exception: %s", stock_err)
 
-    # Step B: Webpage or fallback download via yt-dlp
+    # Step B: Direct raw video file check
+    if not downloaded_file:
+        is_direct = await _is_direct_video_url(clean_url, parsed)
+        if is_direct:
+            try:
+                logger.info("Attempting direct video stream download with spoofed browser headers: %s", clean_url[:80])
+                downloaded_file = await _download_direct_stream(clean_url, output_path)
+            except InvalidInputError as input_err:
+                if "exceeds maximum allowed size" in input_err.message:
+                    raise
+                logger.warning("Direct video download indicated non-video (%s); falling back to yt-dlp: %s", input_err, clean_url[:80])
+                downloaded_file = None
+            except Exception as direct_err:
+                logger.warning("Direct video download failed (%s); falling back to yt-dlp: %s", direct_err, clean_url[:80])
+                downloaded_file = None
+
+    # Step C: Webpage or fallback download via yt-dlp
     if not downloaded_file:
         try:
             logger.info("Invoking yt-dlp for video extraction: %s", clean_url[:80])
