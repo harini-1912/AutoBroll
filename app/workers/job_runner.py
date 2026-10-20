@@ -796,9 +796,13 @@ class JobRunner:
 
             # 2. Promote clean exported artifacts into final directory
             if final_dir.resolve() != job_dir.resolve():
-                if final_dir.exists():
-                    shutil.rmtree(final_dir, ignore_errors=True)
-                shutil.copytree(str(job_dir), str(final_dir))
+                final_dir.mkdir(parents=True, exist_ok=True)
+                for item in job_dir.iterdir():
+                    dest = final_dir / item.name
+                    if item.is_file():
+                        shutil.copy2(str(item), str(dest))
+                    elif item.is_dir():
+                        shutil.copytree(str(item), str(dest), dirs_exist_ok=True)
                 self._cleanup_job_scratch_files(final_dir, keep_final_artifacts=True)
 
             job_succeeded = True

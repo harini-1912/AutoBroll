@@ -257,8 +257,15 @@ async def swap_scene_clip(
     summary="Download Generated Asset or Metadata (Standard artifact alias)",
     include_in_schema=False,
 )
-def download_asset(job_id: str, filename: str):
-    """Serve output video, SRT, timeline, or manifest file with strict containment."""
+def download_asset(
+    job_id: str,
+    filename: str,
+    preview: Optional[str] = None,
+    inline: Optional[str] = None,
+):
+    """Serve output video, SRT, timeline, or manifest file with strict containment and stream support."""
+    import shutil
+
     # Validate job_id to prevent path traversal
     if ".." in job_id or "/" in job_id or "\\" in job_id:
         raise InvalidInputError(f"Invalid characters in job_id: '{job_id}'")
@@ -288,26 +295,68 @@ def download_asset(job_id: str, filename: str):
         raise InvalidInputError("Path traversal outside storage directory detected.")
 
     # Determine asset_key, media_type, and attachment headers
+    is_preview = preview in ("1", "true") or inline in ("1", "true")
+
     if safe_name.endswith(".mp4") or raw_name.startswith("video_"):
         asset_key = raw_name[:-4] if raw_name.endswith(".mp4") else raw_name
         download_filename = f"{asset_key}.mp4"
         media_type = "video/mp4"
-        headers = {"Content-Disposition": f'attachment; filename="{download_filename}"'}
     elif safe_name.endswith(".json"):
         download_filename = safe_name
         media_type = "application/json"
-        headers = {"Content-Disposition": f'attachment; filename="{safe_name}"'}
     elif safe_name.endswith(".srt"):
         download_filename = safe_name
         media_type = "text/plain; charset=utf-8"
-        headers = {"Content-Disposition": f'attachment; filename="{safe_name}"'}
     else:
         download_filename = safe_name
         media_type = "application/octet-stream"
-        headers = {"Content-Disposition": f'attachment; filename="{safe_name}"'}
+
+    disposition = "inline" if is_preview else f'attachment; filename="{download_filename}"'
+    headers = {
+        "Content-Disposition": disposition,
+        "Accept-Ranges": "bytes",
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Expose-Headers": "Content-Disposition, Content-Length, Accept-Ranges",
+    }
 
     if not target_file.exists():
-        # Check storage backend
+        # Fallback 1: check ARTIFACTS_DIR / job_id
+        artifacts_root = Path(settings.ARTIFACTS_DIR).resolve()
+        candidate = (artifacts_root / job_id / safe_name).resolve()
+        if candidate.exists():
+            target_file = candidate
+        else:
+            # Fallback 2: Check staging folders job_* in ARTIFACTS_DIR
+            for s_dir in artifacts_root.glob("job_*"):
+                if s_dir.is_dir():
+                    cand_file = s_dir / safe_name
+                    if cand_file.exists():
+                        mf = s_dir / "manifest.json"
+                        tf = s_dir / "timeline.json"
+                        matched = False
+                        if mf.exists():
+                            try:
+                                if json.loads(mf.read_text(encoding="utf-8")).get("job_id") == job_id:
+                                    matched = True
+                            except Exception:
+                                pass
+                        if not matched and tf.exists():
+                            try:
+                                if json.loads(tf.read_text(encoding="utf-8")).get("job_id") == job_id:
+                                    matched = True
+                            except Exception:
+                                pass
+                        if matched:
+                            target_file = cand_file
+                            try:
+                                (storage_root / job_id).mkdir(parents=True, exist_ok=True)
+                                shutil.copy2(str(cand_file), str(storage_root / job_id / safe_name))
+                            except Exception:
+                                pass
+                            break
+
+    if not target_file.exists():
+        # Fallback 3: Check storage backend
         storage = get_storage()
         rel_path = f"{job_id}/{safe_name}"
         if storage.exists(rel_path):
@@ -328,10 +377,11 @@ def _build_job_response(job_dict: Dict[str, Any]) -> JobResponse:
 
     # Calculate real-time output availability on storage
     storage_root = Path(settings.LOCAL_STORAGE_DIR) / job_id
+    artifacts_root = Path(settings.ARTIFACTS_DIR) / job_id
     outputs_avail = {}
     for key, url in result_urls.items():
         fname = Path(url).name
-        outputs_avail[key] = (storage_root / fname).exists()
+        outputs_avail[key] = (storage_root / fname).exists() or (artifacts_root / fname).exists()
 
     return JobResponse(
         job_id=job_id,
@@ -349,3 +399,4 @@ def _build_job_response(job_dict: Dict[str, Any]) -> JobResponse:
         error=job_dict.get("error_payload"),
         warnings=job_dict.get("warnings") or [],
     )
+

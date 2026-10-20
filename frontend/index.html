@@ -128,6 +128,28 @@
       display: inline-flex; align-items: center; gap: 0.3rem;
     }
     .output-link:hover { text-decoration: underline; }
+    .btn-download {
+      background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+      color: #fff;
+      border: none;
+      padding: 0.4rem 0.85rem;
+      border-radius: 6px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      transition: all 0.15s;
+    }
+    .btn-download:hover:not(:disabled) {
+      background: linear-gradient(135deg, #4f46e5 0%, #4338ca 100%);
+      transform: translateY(-1px);
+    }
+    .btn-download:disabled {
+      opacity: 0.6;
+      cursor: wait;
+    }
 
     .error-box {
       background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.3);
@@ -384,6 +406,11 @@
       const [swapVideoUrl, setSwapVideoUrl] = useState('');
       const [timelineData, setTimelineData] = useState(null);
 
+      // Video Preview & Download Feedback State
+      const [selectedRatioPreview, setSelectedRatioPreview] = useState('16:9');
+      const [downloadingKey, setDownloadingKey] = useState(null);
+      const [downloadError, setDownloadError] = useState(null);
+
       // Idea to Storyboard Companion State
       const [brainDumpText, setBrainDumpText] = useState('');
       const [targetSceneCount, setTargetSceneCount] = useState(4);
@@ -546,6 +573,38 @@
             setTimelineData(json);
           }
         } catch (_) {}
+      };
+
+      // Handle reliable file download with blob creation and direct fallback
+      const handleDownload = async (url, filename, key) => {
+        setDownloadingKey(key);
+        setDownloadError(null);
+        try {
+          const res = await fetch(url);
+          if (!res.ok) {
+            let msg = `Server returned HTTP ${res.status}`;
+            try {
+              const errJson = await res.json();
+              if (errJson?.error?.message) msg = errJson.error.message;
+            } catch (_) {}
+            throw new Error(msg);
+          }
+          const blob = await res.blob();
+          const blobUrl = window.URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = blobUrl;
+          a.download = filename;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          setTimeout(() => window.URL.revokeObjectURL(blobUrl), 3000);
+        } catch (err) {
+          console.error('Download error:', err);
+          setDownloadError(`Could not download ${filename}: ${err.message}. If the host restarted, please generate a new video.`);
+          window.open(url, '_blank');
+        } finally {
+          setDownloadingKey(null);
+        }
       };
 
       // Submit a scene clip swap request
@@ -985,27 +1044,124 @@
                   <h3 style={{fontSize: '0.95rem', fontWeight: 600, marginTop: '1.5rem', marginBottom: '0.75rem'}}>Generated Outputs</h3>
                   {jobStatus.result_urls ? (
                     <div>
+                      {/* Video Player Preview if any video exists */}
+                      {Object.keys(jobStatus.result_urls).some(k => k.startsWith('video_')) && (
+                        <div style={{marginBottom: '1.25rem', background: '#090d16', borderRadius: '12px', border: '1px solid rgba(99, 102, 241, 0.3)', padding: '1rem', overflow: 'hidden'}}>
+                          <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem', flexWrap: 'wrap', gap: '0.5rem'}}>
+                            <span style={{fontSize: '0.9rem', fontWeight: 600, color: '#f8fafc', display: 'flex', alignItems: 'center', gap: '0.4rem'}}>
+                              🎬 Video Player & Preview
+                            </span>
+                            <div style={{display: 'flex', gap: '0.35rem'}}>
+                              {Object.keys(jobStatus.result_urls).filter(k => k.startsWith('video_')).map(k => {
+                                const ratio = k.replace('video_', '').replace('_', ':');
+                                const isActive = (selectedRatioPreview === ratio) || (!selectedRatioPreview && k === 'video_16_9');
+                                return (
+                                  <button
+                                    key={k}
+                                    type="button"
+                                    onClick={() => setSelectedRatioPreview(ratio)}
+                                    style={{
+                                      padding: '0.25rem 0.6rem',
+                                      fontSize: '0.75rem',
+                                      borderRadius: '4px',
+                                      border: isActive ? '1px solid #6366f1' : '1px solid #334155',
+                                      background: isActive ? 'rgba(99, 102, 241, 0.25)' : 'rgba(30, 41, 59, 0.5)',
+                                      color: isActive ? '#a5b4fc' : '#94a3b8',
+                                      cursor: 'pointer'
+                                    }}
+                                  >
+                                    {ratio}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+
+                          <div style={{
+                            width: '100%',
+                            maxHeight: '400px',
+                            background: '#000',
+                            borderRadius: '8px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            overflow: 'hidden'
+                          }}>
+                            <video
+                              key={`preview_${jobStatus.job_id}_${selectedRatioPreview}`}
+                              controls
+                              playsInline
+                              preload="metadata"
+                              style={{width: '100%', maxHeight: '400px', objectFit: 'contain', borderRadius: '8px'}}
+                              src={`/api/v1/jobs/download/${jobStatus.job_id}/video_${selectedRatioPreview.replace(':', '_')}.mp4?preview=1`}
+                            >
+                              Your browser does not support the video tag.
+                            </video>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Download Error Banner */}
+                      {downloadError && (
+                        <div style={{
+                          padding: '0.75rem 1rem',
+                          background: 'rgba(239, 68, 68, 0.15)',
+                          border: '1px solid rgba(239, 68, 68, 0.4)',
+                          borderRadius: '8px',
+                          color: '#fca5a5',
+                          fontSize: '0.82rem',
+                          marginBottom: '1rem',
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center'
+                        }}>
+                          <span>{downloadError}</span>
+                          <button type="button" onClick={() => setDownloadError(null)} style={{background: 'none', border: 'none', color: '#fca5a5', cursor: 'pointer', fontSize: '1rem'}}>✕</button>
+                        </div>
+                      )}
+
+                      {/* Output File Rows */}
                       {Object.entries(jobStatus.result_urls).map(([key, url]) => {
                         const isReady = jobStatus.outputs_available ? jobStatus.outputs_available[key] : true;
                         const filename = key.startsWith('video_')
                           ? (key.endsWith('.mp4') ? key : `${key}.mp4`)
                           : (key === 'captions_srt' ? 'captions.srt' : (key === 'timeline_json' ? 'timeline.json' : (key === 'manifest_json' ? 'manifest.json' : (key.includes('.') ? key : `${key}.mp4`))));
                         const downloadHref = `/api/v1/jobs/download/${jobStatus.job_id}/${filename}`;
+                        const isDownloading = downloadingKey === key;
 
                         return (
                           <div key={key} className="output-item">
-                            <span style={{fontSize: '0.85rem', color: '#cbd5e1'}}>{key}</span>
-                            {isReady ? (
-                              <a
-                                href={downloadHref}
-                                download={filename}
-                                className="output-link"
-                              >
-                                Download ↓
-                              </a>
-                            ) : (
-                              <span style={{fontSize: '0.75rem', color: '#64748b'}}>Rendering...</span>
-                            )}
+                            <div>
+                              <span style={{fontSize: '0.85rem', color: '#cbd5e1', fontWeight: 500}}>{key}</span>
+                              <span style={{fontSize: '0.75rem', color: '#64748b', marginLeft: '0.5rem'}}>({filename})</span>
+                            </div>
+                            <div style={{display: 'flex', alignItems: 'center', gap: '0.75rem'}}>
+                              {isReady ? (
+                                <>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDownload(downloadHref, filename, key)}
+                                    disabled={isDownloading}
+                                    className="btn-download"
+                                  >
+                                    {isDownloading ? '⏳ Downloading...' : 'Download ↓'}
+                                  </button>
+                                  <a
+                                    href={downloadHref}
+                                    download={filename}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="output-link"
+                                    style={{fontSize: '0.78rem', color: '#94a3b8'}}
+                                    title="Open directly or download via browser"
+                                  >
+                                    Direct Link ↗
+                                  </a>
+                                </>
+                              ) : (
+                                <span style={{fontSize: '0.75rem', color: '#64748b'}}>Rendering...</span>
+                              )}
+                            </div>
                           </div>
                         );
                       })}
@@ -1018,6 +1174,7 @@
                   ) : (
                     <p style={{fontSize: '0.85rem', color: '#64748b'}}>Outputs will appear here upon completion.</p>
                   )}
+
                 </div>
               )}
 
