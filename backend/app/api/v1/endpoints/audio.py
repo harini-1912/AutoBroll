@@ -118,10 +118,12 @@ async def transcribe_audio_to_scenes(
         transcript = await asyncio.to_thread(audio_transcriber.transcribe, tmp_path)
 
         if not transcript or not transcript.strip():
-            raw_transcript = "Spoken narration audio track."
-            logger.warning("STT returned empty transcript for %s; using placeholder", tmp_path.name)
-        else:
-            raw_transcript = transcript.strip()
+            logger.warning("STT could not detect speech for %s", tmp_path.name)
+            raise InvalidInputError(
+                "Unable to detect clear speech from the audio file. Please ensure the audio contains clear spoken voiceover, or type your script into the script field."
+            )
+
+        raw_transcript = transcript.strip()
 
         # Extract domain context for high relevance visual hint parsing
         domain_context = extract_script_domain_context(raw_transcript)

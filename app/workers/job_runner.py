@@ -341,13 +341,10 @@ class JobRunner:
                     if p_info.get("duration") and p_info["duration"] > 0:
                         total_duration = p_info["duration"]
 
-                    # If audio was provided, check if script is empty or matches dummy template
+                    # If audio was provided, check if script is empty or matches the default UI template
                     DEFAULT_SAMPLE_PHRASES = [
-                        "saving money",
-                        "investing with patience",
-                        "financial freedom",
+                        "a creator records a sixty-second voiceover",
                         "creator records a sixty-second voiceover",
-                        "creator records a video about saving money",
                     ]
                     is_dummy_template = bool(
                         script and any(phrase in script.lower() for phrase in DEFAULT_SAMPLE_PHRASES)

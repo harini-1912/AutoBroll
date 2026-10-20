@@ -763,8 +763,47 @@
             raw_transcript: data.raw_transcript || '',
             scenes_json: JSON.stringify(data.scenes || [], null, 2),
           });
+          if (data.raw_transcript) {
+            setAudioTranscript(data.raw_transcript);
+          }
         } catch (err) {
           console.error('Audio analysis failed:', err);
+          setAudioAnalyzeError(err.message);
+        } finally {
+          setAudioAnalyzing(false);
+        }
+      };
+
+      // Auto-transcribe audio file immediately upon file selection
+      const handleAudioFileSelected = async (file) => {
+        setAudioFile(file);
+        if (!file) {
+          setAudioReviewData(null);
+          return;
+        }
+        setAudioAnalyzing(true);
+        setAudioAnalyzeError(null);
+        try {
+          const formData = new FormData();
+          formData.append('file', file);
+          const res = await fetch('/api/v1/audio/transcribe-to-scenes', {
+            method: 'POST',
+            body: formData,
+          });
+          const data = await res.json();
+          if (!res.ok) {
+            const errMsg = data?.error?.message || data?.detail || `HTTP ${res.status}`;
+            throw new Error(errMsg);
+          }
+          setAudioReviewData({
+            raw_transcript: data.raw_transcript || '',
+            scenes_json: JSON.stringify(data.scenes || [], null, 2),
+          });
+          if (data.raw_transcript) {
+            setAudioTranscript(data.raw_transcript);
+          }
+        } catch (err) {
+          console.error('Audio auto-transcription failed:', err);
           setAudioAnalyzeError(err.message);
         } finally {
           setAudioAnalyzing(false);
@@ -984,7 +1023,7 @@
                           <input
                             type="file"
                             accept=".mp3,.wav,.m4a"
-                            onChange={e => setAudioFile(e.target.files[0] || null)}
+                            onChange={e => handleAudioFileSelected(e.target.files[0] || null)}
                             required
                             style={{
                               padding: '0.6rem',

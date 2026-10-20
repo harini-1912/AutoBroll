@@ -40,3 +40,18 @@ def test_transcribe_audio_missing_inputs():
     resp = client.post("/api/v1/audio/transcribe-to-scenes")
     assert resp.status_code == 400
     assert resp.json()["error"]["code"] == "INVALID_INPUT"
+
+def test_transcribe_audio_empty_speech(tmp_path):
+    fake_audio = tmp_path / "silent.mp3"
+    fake_audio.write_bytes(b"dummy silent audio content")
+
+    with patch("app.api.v1.endpoints.audio.audio_transcriber.transcribe", return_value=None):
+        with open(fake_audio, "rb") as f:
+            resp = client.post(
+                "/api/v1/audio/transcribe-to-scenes",
+                files={"file": ("silent.mp3", f, "audio/mpeg")},
+            )
+
+    assert resp.status_code == 400
+    assert resp.json()["error"]["code"] == "INVALID_INPUT"
+
