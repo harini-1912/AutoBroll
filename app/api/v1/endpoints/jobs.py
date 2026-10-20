@@ -3,7 +3,7 @@ import hashlib
 import json
 import uuid
 from typing import Any, Dict, List, Optional
-from fastapi import APIRouter, File, Form, Header, Request, Response, UploadFile, status
+from fastapi import APIRouter, BackgroundTasks, File, Form, Header, Request, Response, UploadFile, status
 from fastapi.responses import FileResponse, JSONResponse, Response
 from pathlib import Path
 
@@ -33,6 +33,10 @@ from app.workers.job_runner import job_runner
 
 router = APIRouter(tags=["Jobs"])
 
+async def _dispatch_job_background(job_id: str) -> None:
+    """Async background task dispatch that executes on the main event loop."""
+    job_runner.enqueue_job(job_id)
+
 @router.post(
     "",
     status_code=status.HTTP_202_ACCEPTED,
@@ -42,6 +46,7 @@ router = APIRouter(tags=["Jobs"])
 async def create_job_json(
     request: Request,
     job_req: JobCreateRequest,
+    background_tasks: BackgroundTasks,
     idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
 ):
     """Create a video generation job from a JSON payload with Idempotency support."""
@@ -80,8 +85,8 @@ async def create_job_json(
             response_body=initial_body,
         )
 
-    # Enqueue background execution
-    job_runner.enqueue_job(job_id)
+    # Enqueue background execution via FastAPI's BackgroundTasks so HTTP response completes immediately
+    background_tasks.add_task(_dispatch_job_background, job_id)
 
     job_record = db.get_job(job_id)
     return _build_job_response(job_record)
@@ -93,6 +98,7 @@ async def create_job_json(
     summary="Create B-Roll Video Job with Audio File Upload",
 )
 async def create_job_upload(
+    background_tasks: BackgroundTasks,
     audio_file: UploadFile = File(...),
     voice: str = Form("en-IN-female"),
     aspect_ratios: str = Form("16:9,9:16"),
@@ -142,7 +148,8 @@ async def create_job_upload(
     }
 
     db.create_job(job_id=job_id, request_data=req_dict, idempotency_key=idempotency_key)
-    job_runner.enqueue_job(job_id)
+    # Enqueue background execution via FastAPI's BackgroundTasks so HTTP response completes immediately
+    background_tasks.add_task(_dispatch_job_background, job_id)
 
     job_record = db.get_job(job_id)
     return _build_job_response(job_record)

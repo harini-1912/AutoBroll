@@ -121,13 +121,18 @@ class JobRunner:
 
     def enqueue_job(self, job_id: str) -> None:
         """Enqueue job for background asynchronous execution."""
-        task = asyncio.create_task(self._process_job_wrapper(job_id))
-        self.active_tasks[job_id] = task
+        try:
+            loop = asyncio.get_running_loop()
+            task = loop.create_task(self._process_job_wrapper(job_id))
+            self.active_tasks[job_id] = task
 
-        def _cleanup(t: asyncio.Task) -> None:
-            self.active_tasks.pop(job_id, None)
+            def _cleanup(t: asyncio.Task) -> None:
+                self.active_tasks.pop(job_id, None)
 
-        task.add_done_callback(_cleanup)
+            task.add_done_callback(_cleanup)
+        except RuntimeError:
+            # Fallback if invoked outside a running event loop
+            asyncio.run(self._process_job_wrapper(job_id))
 
     async def _process_job_wrapper(self, job_id: str) -> None:
         async with self.semaphore:
@@ -237,17 +242,21 @@ class JobRunner:
                 try:
                     active_tts = self.tts_provider
                     if hasattr(active_tts, "synthesize_with_timestamps"):
-                        total_duration, tts_timestamps = active_tts.synthesize_with_timestamps(
+                        total_duration, tts_timestamps = await asyncio.to_thread(
+                            active_tts.synthesize_with_timestamps,
                             narration_text, voice, str(narration_audio_path)
                         )
                     else:
-                        total_duration = active_tts.synthesize(narration_text, voice, str(narration_audio_path))
+                        total_duration = await asyncio.to_thread(
+                            active_tts.synthesize,
+                            narration_text, voice, str(narration_audio_path)
+                        )
                         tts_timestamps = getattr(active_tts, "last_timestamps", [])
                 except Exception as e:
                     raise TTSGenerationError(f"Text-to-speech generation failed: {str(e)}")
             else:
                 if narration_audio_path.exists():
-                    p_info = probe_media(narration_audio_path)
+                    p_info = await asyncio.to_thread(probe_media, narration_audio_path)
                     if p_info.get("duration") and p_info["duration"] > 0:
                         total_duration = p_info["duration"]
             timings["speech"] = round(time.time() - t0, 3)
@@ -568,7 +577,8 @@ class JobRunner:
                 video_filename = f"video_{ratio_slug}.mp4"
                 video_path = staging_dir / video_filename
 
-                ffmpeg_engine.assemble_video(
+                await asyncio.to_thread(
+                    ffmpeg_engine.assemble_video,
                     scenes_data=scenes_data,
                     aspect_ratio=r,
                     narration_audio_path=narration_audio_path if narration_audio_path.exists() else None,
@@ -579,7 +589,7 @@ class JobRunner:
                     job_start_time=start_time,
                 )
 
-                probe_info = probe_media(video_path)
+                probe_info = await asyncio.to_thread(probe_media, video_path)
                 result_urls[f"video_{ratio_slug}"] = f"{base_url}/api/v1/jobs/download/{job_id}/{video_filename}"
                 dim = probe_info.get("resolution") or ("1920x1080" if r == "16:9" else ("1080x1920" if r == "9:16" else "1080x1080"))
                 outputs_meta[f"video_{ratio_slug}"] = {
@@ -607,7 +617,7 @@ class JobRunner:
                 v_file = staging_dir / f"video_{r.replace(':', '_')}.mp4"
                 if not v_file.exists() or v_file.stat().st_size == 0:
                     raise RenderFailedError(f"Rendered video for aspect ratio {r} is missing or corrupted.")
-                probe_res = probe_media(v_file)
+                probe_res = await asyncio.to_thread(probe_media, v_file)
                 if not probe_res.get("is_valid"):
                     raise RenderFailedError(
                         f"Rendered video for aspect ratio {r} failed media integrity check: {probe_res.get('error')}"

@@ -463,13 +463,16 @@
             });
           }
 
-          const data = await res.json();
           if (!res.ok) {
-            throw new Error(data.error?.message || 'Failed to create job');
+            alert(`Server error (${res.status}): ${await res.text() || res.statusText}`);
+            return;
           }
 
-          setActiveJobId(data.job_id);
-          setJobStatus(data);
+          const data = await res.json();
+          if (data && data.job_id) {
+            setActiveJobId(data.job_id);
+            setJobStatus(data);
+          }
         } catch (err) {
           alert('Submission error: ' + err.message);
         } finally {
