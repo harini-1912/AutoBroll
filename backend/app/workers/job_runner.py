@@ -751,13 +751,14 @@ class JobRunner:
                 except Exception as e:
                     logger.debug("Failed cleaning scratch dir %s: %s", p, str(e))
 
-        # Remove per-ratio scenes directories (scenes_16_9, scenes_9_16, scenes_1_1)
-        for s_dir in target_dir.glob("scenes_*"):
-            if s_dir.is_dir():
-                try:
-                    shutil.rmtree(s_dir, ignore_errors=True)
-                except Exception as e:
-                    logger.debug("Failed cleaning scene dir %s: %s", s_dir, str(e))
+        # Remove per-ratio scenes directories only if not keeping final artifacts
+        if not keep_final_artifacts:
+            for s_dir in target_dir.glob("scenes_*"):
+                if s_dir.is_dir():
+                    try:
+                        shutil.rmtree(s_dir, ignore_errors=True)
+                    except Exception as e:
+                        logger.debug("Failed cleaning scene dir %s: %s", s_dir, str(e))
 
         # Remove concat demuxer text files and partial files
         scratch_patterns = ["concat_*.txt", "concat_list.txt", "*.part", "*.tmp*", "*.tmp_ai*", "*.tmp_kenburns*"]

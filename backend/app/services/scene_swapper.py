@@ -118,7 +118,11 @@ class SceneSwapper:
             raise JobNotFoundError(f"Storage directory for job '{job_id}' not found.")
 
         req_payload = job_record.get("request_payload") or {}
-        aspect_ratios = req_payload.get("aspect_ratios") or ["16:9", "9:16"]
+        aspect_ratios = (
+            timeline.get("aspect_ratios")
+            or req_payload.get("aspect_ratios")
+            or ["16:9"]
+        )
         total_duration = float(timeline.get("total_duration", 5.0))
         scene_duration = float(target_scene.get("duration", 2.0))
 
@@ -185,17 +189,46 @@ class SceneSwapper:
                         # Copy cached clip into staging
                         shutil.copy2(str(existing_clip), str(dest_clip))
                     else:
-                        # Safe fallback: if older job did not preserve individual scene clip, generate it
-                        logger.warning("Cached scene clip %s missing; rendering on demand", existing_clip.name)
-                        ffmpeg_engine.render_scene_clip(
-                            scene_id=sc.get("scene_id", f"scene_{idx:03d}"),
-                            scene_text=sc.get("text", ""),
-                            duration=sc.get("duration", 2.0),
-                            aspect_ratio=r,
-                            output_path=dest_clip,
-                            scene_index=idx,
-                            raw_video_path=Path(sc.get("raw_clip_path")) if sc.get("raw_clip_path") else None,
-                        )
+                        # Smart fast fallback: slice exact scene footage out of existing final video!
+                        existing_final_video = job_dir / f"video_{ratio_slug}.mp4"
+                        extracted_ok = False
+                        if existing_final_video.exists() and existing_final_video.stat().st_size > 0:
+                            start_time_val = max(0.0, float(sc.get("start_time", 0.0)))
+                            dur_val = max(0.5, float(sc.get("duration", 2.0)))
+                            cmd_slice = [
+                                ffmpeg_engine.ffmpeg_path,
+                                "-y",
+                                "-ss",
+                                str(start_time_val),
+                                "-t",
+                                str(dur_val),
+                                "-i",
+                                str(existing_final_video),
+                                "-c:v",
+                                "copy",
+                                "-an",
+                                str(dest_clip),
+                            ]
+                            try:
+                                res_slice = subprocess.run(cmd_slice, capture_output=True, text=True, timeout=15)
+                                if res_slice.returncode == 0 and dest_clip.exists() and dest_clip.stat().st_size > 0:
+                                    extracted_ok = True
+                                    logger.info("Preserved scene %d footage directly from final video in %.2fs", idx, dur_val)
+                            except Exception as e:
+                                logger.debug("Could not slice scene %d from final video: %s", idx, str(e))
+
+                        if not extracted_ok:
+                            # Ultimate fallback: render on demand
+                            logger.warning("Cached scene clip %s missing; rendering on demand", existing_clip.name)
+                            ffmpeg_engine.render_scene_clip(
+                                scene_id=sc.get("scene_id", f"scene_{idx:03d}"),
+                                scene_text=sc.get("text", ""),
+                                duration=sc.get("duration", 2.0),
+                                aspect_ratio=r,
+                                output_path=dest_clip,
+                                scene_index=idx,
+                                raw_video_path=Path(sc.get("raw_clip_path")) if sc.get("raw_clip_path") else None,
+                            )
 
                 # C. Re-assemble final video from the updated set of scene clips
                 narration_audio = job_dir / "narration.wav"
