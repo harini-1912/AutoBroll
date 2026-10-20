@@ -1,3 +1,12 @@
+---
+title: IncuBrix AI Video Engine
+emoji: 🎬
+colorFrom: indigo
+colorTo: blue
+sdk: docker
+app_port: 7860
+---
+
 # IncuBrix Script & Voiceover to B-Roll Video Engine
 
 An enterprise-grade, asynchronous video processing engine that transforms narration scripts or voiceovers into licence-clean, timed B-roll videos across multiple aspect ratios (`16:9`, `9:16`, `1:1`) with synchronized subtitles, complete clip lineage, and detailed manifests.

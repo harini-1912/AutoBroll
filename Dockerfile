@@ -1,37 +1,39 @@
-# Multi-stage Dockerfile for IncuBrix B-Roll Video Engine
 FROM python:3.11-slim
 
-# Install system dependencies including FFmpeg and curl for healthchecks
+# Install system dependencies: ffmpeg, curl, git, ca-certificates
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
     curl \
+    git \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-WORKDIR /app
+# Set up non-root user 'user' with UID 1000
+RUN useradd -m -u 1000 user
 
-# Copy dependency definition
+WORKDIR /home/user/app
+
+# Install Python dependencies
 COPY requirements.txt .
-
-# Install python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy application source code
-COPY . .
+# Copy application source code with user ownership
+COPY --chown=user:user . .
 
-# Ensure storage and data directories exist with write permissions
-RUN mkdir -p /app/data /app/storage /app/temp
+# Ensure artifacts, data, storage, and temp directories exist with ownership given to user 1000
+RUN mkdir -p /home/user/app/artifacts \
+             /home/user/app/data \
+             /home/user/app/storage \
+             /home/user/app/temp && \
+    chown -R user:user /home/user/app
 
-# Create non-root user for security
-RUN useradd -m -u 1000 appuser && \
-    chown -R appuser:appuser /app
+USER user
 
-USER appuser
+ENV HOME=/home/user \
+    PORT=7860 \
+    LOCAL_STORAGE_DIR=/home/user/app/artifacts \
+    ARTIFACTS_DIR=/home/user/app/artifacts
 
-EXPOSE 8000
+EXPOSE 7860
 
-# Health check
-HEALTHCHECK --interval=15s --timeout=5s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:8000/health || exit 1
-
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "7860"]
