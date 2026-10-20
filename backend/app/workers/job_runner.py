@@ -676,10 +676,11 @@ class JobRunner:
                 burn_in_captions = False
 
             # Render video for each requested aspect ratio using FFmpeg assembly engine
-            for r in aspect_ratios:
+            for r_idx, r in enumerate(aspect_ratios):
                 ratio_slug = r.replace(":", "_")
                 video_filename = f"video_{ratio_slug}.mp4"
                 video_path = staging_dir / video_filename
+                db.update_job_progress(job_id, "processing", min(90, 85 + r_idx * 3), f"rendering_{ratio_slug}")
 
                 await asyncio.to_thread(
                     ffmpeg_engine.assemble_video,

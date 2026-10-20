@@ -548,9 +548,9 @@
           }
         };
 
-        // Poll immediately and setup interval
+        // Poll immediately and setup interval (3s interval to reduce server CPU load)
         checkStatus();
-        pollingTimerRef.current = setInterval(checkStatus, 1500);
+        pollingTimerRef.current = setInterval(checkStatus, 3000);
 
         return () => {
           if (pollingTimerRef.current) {
