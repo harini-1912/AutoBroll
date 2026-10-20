@@ -36,7 +36,10 @@ ENV HOME=/home/user \
     FFMPEG_THREADS=2 \
     MAX_CONCURRENT_JOBS=1 \
     LOCAL_STORAGE_DIR=/home/user/app/artifacts \
-    ARTIFACTS_DIR=/home/user/app/artifacts
+    ARTIFACTS_DIR=/home/user/app/artifacts \
+    PIXABAY_API_KEY=58096074-b7197b00a8b5a59653d71b5e3 \
+    POLLINATIONS_API_KEY=sk_GAvJaRf8drlVtRQwBNdHUKWYMdgIFf70 \
+    TTS_PROVIDER=gtts
 
 EXPOSE 8000
 

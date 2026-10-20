@@ -82,13 +82,13 @@ class Settings(BaseModel):
 
     # Providers
     FOOTAGE_PRIMARY_PROVIDER: str = Field(default_factory=lambda: os.getenv("FOOTAGE_PRIMARY_PROVIDER", "pixabay"))
-    PIXABAY_API_KEY: Optional[str] = Field(default_factory=lambda: os.getenv("PIXABAY_API_KEY") or None)
+    PIXABAY_API_KEY: Optional[str] = Field(default_factory=lambda: os.getenv("PIXABAY_API_KEY") or "58096074-b7197b00a8b5a59653d71b5e3")
     PEXELS_API_KEY: Optional[str] = Field(default_factory=lambda: os.getenv("PEXELS_API_KEY") or None)
-    POLLINATIONS_API_KEY: Optional[str] = Field(default_factory=lambda: os.getenv("POLLINATIONS_API_KEY") or None)
+    POLLINATIONS_API_KEY: Optional[str] = Field(default_factory=lambda: os.getenv("POLLINATIONS_API_KEY") or "sk_GAvJaRf8drlVtRQwBNdHUKWYMdgIFf70")
     REPLICATE_API_TOKEN: Optional[str] = Field(default_factory=lambda: os.getenv("REPLICATE_API_TOKEN") or None)
 
     # TTS
-    TTS_PROVIDER: str = Field(default_factory=lambda: os.getenv("TTS_PROVIDER", "mock"))
+    TTS_PROVIDER: str = Field(default_factory=lambda: os.getenv("TTS_PROVIDER", "gtts"))
     DEFAULT_VOICE: str = Field(default_factory=lambda: os.getenv("DEFAULT_VOICE", "en-IN-female"))
 
     # Concurrency & Retention

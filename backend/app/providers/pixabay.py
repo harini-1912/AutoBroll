@@ -156,33 +156,40 @@ class PixabayFootageProvider(BaseFootageProvider):
         if any(term in check_text for term in avoid_list):
             return None
 
-        # Pick best video stream from 'videos' object, prioritizing medium/large resolutions while respecting size limits
+        # Pick optimal video stream from 'videos' object, prioritizing 1080p/720p (avoids 4K processing bottlenecks)
         videos_obj = hit.get("videos", {}) or {}
         chosen_video = None
 
-        for res_key in preferred_resolutions:
+        # Pass 1: Select crisp HD streams (width between 960 and 1920)
+        for res_key in ["large", "medium", "small"]:
             stream = videos_obj.get(res_key)
             if not stream or not isinstance(stream, dict):
                 continue
             v_url = stream.get("url")
-            if not v_url or not isinstance(v_url, str):
+            if not v_url or not isinstance(v_url, str) or not (v_url.startswith("http://") or v_url.startswith("https://")):
                 continue
-            # Validate URL protocol
-            if not (v_url.startswith("http://") or v_url.startswith("https://")):
-                continue
-            # Validate file size if reported by Pixabay API
-            stream_size = stream.get("size")
-            if stream_size and isinstance(stream_size, (int, float)) and stream_size > self.max_size_bytes:
-                logger.debug("Skipping hit %s resolution %s (size %d exceeds %d bytes)", h_id, res_key, stream_size, self.max_size_bytes)
-                continue
-            # Validate dimensions
             w = stream.get("width", 0)
             h = stream.get("height", 0)
-            if w <= 0 or h <= 0:
-                continue
+            if 960 <= w <= 1920 and h > 0:
+                stream_size = stream.get("size")
+                if not (stream_size and isinstance(stream_size, (int, float)) and stream_size > self.max_size_bytes):
+                    chosen_video = stream
+                    break
 
-            chosen_video = stream
-            break
+        # Pass 2: Fallback if no 1080p/720p stream found
+        if not chosen_video:
+            for res_key in ["medium", "small", "large", "tiny"]:
+                stream = videos_obj.get(res_key)
+                if not stream or not isinstance(stream, dict):
+                    continue
+                v_url = stream.get("url")
+                if not v_url or not isinstance(v_url, str) or not (v_url.startswith("http://") or v_url.startswith("https://")):
+                    continue
+                w = stream.get("width", 0)
+                h = stream.get("height", 0)
+                if w > 0 and h > 0:
+                    chosen_video = stream
+                    break
 
         if not chosen_video or not chosen_video.get("url"):
             return None
