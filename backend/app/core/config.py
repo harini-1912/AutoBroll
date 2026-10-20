@@ -78,6 +78,7 @@ class Settings(BaseModel):
     # Media Binaries
     FFMPEG_PATH: str = Field(default_factory=_resolve_ffmpeg_path)
     FFPROBE_PATH: str = Field(default_factory=_resolve_ffprobe_path)
+    FFMPEG_THREADS: int = Field(default_factory=lambda: int(os.getenv("FFMPEG_THREADS", "2")))
 
     # Providers
     FOOTAGE_PRIMARY_PROVIDER: str = Field(default_factory=lambda: os.getenv("FOOTAGE_PRIMARY_PROVIDER", "pixabay"))

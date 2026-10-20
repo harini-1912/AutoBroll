@@ -190,12 +190,12 @@ async def generate_visual_fallback(
                 "-c:v",
                 "libx264",
                 "-preset",
-                "veryfast",
+                "ultrafast",
                 "-pix_fmt",
                 "yuv420p",
                 str(output_path),
             ]
-            res = await asyncio.to_thread(subprocess.run, cmd_zoom, capture_output=True, text=True, timeout=35)
+            res = await asyncio.to_thread(subprocess.run, cmd_zoom, capture_output=True, text=True, timeout=60)
             if res.returncode == 0 and output_path.exists() and output_path.stat().st_size > 1000:
                 logger.info("Generated Ken Burns zoompan fallback clip: %s", output_path)
                 return output_path
@@ -254,7 +254,7 @@ async def generate_offline_gradient_clip(
         "-c:v",
         "libx264",
         "-preset",
-        "veryfast",
+        "ultrafast",
         "-pix_fmt",
         "yuv420p",
         "-r",
@@ -263,7 +263,7 @@ async def generate_offline_gradient_clip(
     ]
 
     try:
-        proc = await asyncio.to_thread(subprocess.run, cmd_grad, capture_output=True, text=True, timeout=30)
+        proc = await asyncio.to_thread(subprocess.run, cmd_grad, capture_output=True, text=True, timeout=60)
         if proc.returncode == 0 and output_path.exists() and output_path.stat().st_size > 0:
             logger.info("Generated offline FFmpeg gradient fallback: %s (palette=%s)", output_path, palette)
             return output_path
@@ -287,10 +287,10 @@ async def generate_offline_gradient_clip(
         "-c:v",
         "libx264",
         "-preset",
-        "veryfast",
+        "ultrafast",
         "-pix_fmt",
         "yuv420p",
         str(output_path),
     ]
-    await asyncio.to_thread(subprocess.run, cmd_backup, capture_output=True, text=True, timeout=30)
+    await asyncio.to_thread(subprocess.run, cmd_backup, capture_output=True, text=True, timeout=60)
     return output_path

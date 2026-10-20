@@ -189,6 +189,7 @@ class FFmpegEngine:
         color = SCENE_PALETTES[scene_index % len(SCENE_PALETTES)]
 
         output_path.parent.mkdir(parents=True, exist_ok=True)
+        clip_timeout = max(180, int(duration * 25))
 
         # 1. If raw stock video clip is provided, scale, crop, and normalize to target aspect ratio
         if raw_video_path and Path(raw_video_path).exists() and Path(raw_video_path).stat().st_size > 0:
@@ -197,7 +198,7 @@ class FFmpegEngine:
                 self.ffmpeg_path,
                 "-y",
                 "-threads",
-                str(settings.FFMPEG_THREADS),
+                str(getattr(settings, "FFMPEG_THREADS", 2)),
                 "-stream_loop",
                 "-1",
                 "-i",
@@ -209,7 +210,7 @@ class FFmpegEngine:
                 "-c:v",
                 "libx264",
                 "-preset",
-                "veryfast",
+                "ultrafast",
                 "-pix_fmt",
                 "yuv420p",
                 "-r",
@@ -217,15 +218,28 @@ class FFmpegEngine:
                 "-an",
                 str(output_path),
             ]
-            logger.info("Rendering scene clip %s from stock footage %s (%s, %.2fs)", scene_id, Path(raw_video_path).name, aspect_ratio, duration)
-            proc_vid = subprocess.run(cmd_video, capture_output=True, text=True, timeout=45)
-            if proc_vid.returncode == 0 and output_path.exists() and output_path.stat().st_size > 0:
-                return output_path
-            else:
+            logger.info("Rendering scene clip %s from stock footage %s (%s, %.2fs, timeout=%ds)", scene_id, Path(raw_video_path).name, aspect_ratio, duration, clip_timeout)
+            try:
+                proc_vid = subprocess.run(cmd_video, capture_output=True, text=True, timeout=clip_timeout)
+                if proc_vid.returncode == 0 and output_path.exists() and output_path.stat().st_size > 0:
+                    return output_path
+                else:
+                    logger.warning(
+                        "FFmpeg raw video render failed for scene %s (%s); falling back to procedural visual",
+                        scene_id,
+                        proc_vid.stderr[:120] if proc_vid.stderr else "non-zero returncode",
+                    )
+            except subprocess.TimeoutExpired:
                 logger.warning(
-                    "FFmpeg raw video render failed for scene %s (%s); falling back to procedural visual",
+                    "FFmpeg raw video render timed out (%ds) for scene %s; falling back to procedural visual",
+                    clip_timeout,
                     scene_id,
-                    proc_vid.stderr[:120],
+                )
+            except Exception as exc:
+                logger.warning(
+                    "FFmpeg raw video render encountered error (%s) for scene %s; falling back to procedural visual",
+                    str(exc),
+                    scene_id,
                 )
 
         # 2. Procedural visual backdrop fallback
@@ -246,7 +260,7 @@ class FFmpegEngine:
             self.ffmpeg_path,
             "-y",
             "-threads",
-            str(settings.FFMPEG_THREADS),
+            str(getattr(settings, "FFMPEG_THREADS", 2)),
             "-f",
             "lavfi",
             "-i",
@@ -256,7 +270,7 @@ class FFmpegEngine:
             "-c:v",
             "libx264",
             "-preset",
-            "veryfast",
+            "ultrafast",
             "-pix_fmt",
             "yuv420p",
             "-r",
@@ -265,35 +279,43 @@ class FFmpegEngine:
         ]
 
         logger.debug("Rendering scene clip %s with procedural text: %s", scene_id, clean_text)
-        proc = subprocess.run(cmd_with_text, capture_output=True, text=True, timeout=30)
+        try:
+            proc = subprocess.run(cmd_with_text, capture_output=True, text=True, timeout=clip_timeout)
+            if proc.returncode == 0 and output_path.exists() and output_path.stat().st_size > 0:
+                return output_path
+            else:
+                logger.warning("drawtext filter failed for scene %s (%s); falling back to clean backdrop", scene_id, proc.stderr[:120] if proc.stderr else "non-zero returncode")
+        except Exception as exc:
+            logger.warning("drawtext filter error (%s) for scene %s; falling back to clean backdrop", str(exc), scene_id)
 
-        # If drawtext fails (e.g. font missing on platform), fallback cleanly to plain background
-        if proc.returncode != 0:
-            logger.warning("drawtext filter failed for scene %s (%s); falling back to clean backdrop", scene_id, proc.stderr[:120])
-            cmd_fallback = [
-                self.ffmpeg_path,
-                "-y",
-                "-threads",
-                str(settings.FFMPEG_THREADS),
-                "-f",
-                "lavfi",
-                "-i",
-                f"color=c={color}:s={width}x{height}:r=30:d={duration}",
-                "-c:v",
-                "libx264",
-                "-preset",
-                "veryfast",
-                "-pix_fmt",
-                "yuv420p",
-                "-r",
-                "30",
-                str(output_path),
-            ]
-            fallback_proc = subprocess.run(cmd_fallback, capture_output=True, text=True, timeout=30)
+        # Fallback cleanly to plain background
+        cmd_fallback = [
+            self.ffmpeg_path,
+            "-y",
+            "-threads",
+            str(getattr(settings, "FFMPEG_THREADS", 2)),
+            "-f",
+            "lavfi",
+            "-i",
+            f"color=c={color}:s={width}x{height}:r=30:d={duration}",
+            "-c:v",
+            "libx264",
+            "-preset",
+            "ultrafast",
+            "-pix_fmt",
+            "yuv420p",
+            "-r",
+            "30",
+            str(output_path),
+        ]
+        try:
+            fallback_proc = subprocess.run(cmd_fallback, capture_output=True, text=True, timeout=clip_timeout)
             if fallback_proc.returncode != 0:
                 raise RenderFailedError(
                     f"FFmpeg failed to render scene {scene_id}: {fallback_proc.stderr[:200]}"
                 )
+        except Exception as exc:
+            raise RenderFailedError(f"FFmpeg fallback failed for scene {scene_id}: {str(exc)}")
 
         if not output_path.exists() or output_path.stat().st_size == 0:
             raise RenderFailedError(f"Rendered scene clip {scene_id} is missing or empty.")
@@ -375,7 +397,7 @@ class FFmpegEngine:
             self.ffmpeg_path,
             "-y",
             "-threads",
-            str(settings.FFMPEG_THREADS),
+            str(getattr(settings, "FFMPEG_THREADS", 2)),
             "-f",
             "concat",
             "-safe",
@@ -438,7 +460,7 @@ class FFmpegEngine:
                 "-c:v",
                 "libx264",
                 "-preset",
-                "veryfast",
+                "ultrafast",
                 "-pix_fmt",
                 "yuv420p",
                 "-r",
@@ -461,19 +483,22 @@ class FFmpegEngine:
             str(output_path),
         ])
 
-        assembly_timeout = max(180, int(sum(sc.get("duration", 2.0) for sc in scenes_data) * 3))
+        assembly_timeout = max(300, int(sum(sc.get("duration", 2.0) for sc in scenes_data) * 10))
         logger.info("Executing video assembly for aspect ratio %s -> %s (burn_in=%s, timeout=%ds)", aspect_ratio, output_path.name, should_burn, assembly_timeout)
-        proc = subprocess.run(cmd, cwd=str(staging_dir), capture_output=True, text=True, timeout=assembly_timeout)
-        if proc.returncode != 0:
-            err_tail = proc.stderr[-400:].strip() if len(proc.stderr) > 400 else proc.stderr.strip()
-            # If burned-in encoding failed unexpectedly, attempt fallback to stream copy
+        try:
+            proc = subprocess.run(cmd, cwd=str(staging_dir), capture_output=True, text=True, timeout=assembly_timeout)
+            if proc.returncode != 0:
+                err_tail = proc.stderr[-400:].strip() if len(proc.stderr) > 400 else proc.stderr.strip()
+                raise RuntimeError(err_tail)
+        except (subprocess.TimeoutExpired, Exception) as enc_err:
+            # If burned-in encoding failed or timed out unexpectedly, attempt fallback to stream copy
             if should_burn:
-                logger.warning("Burned-in subtitle render failed (%s); falling back to direct stream copy", err_tail)
+                logger.warning("Burned-in subtitle render failed or timed out (%s); falling back to direct stream copy", str(enc_err))
                 fallback_cmd = [
                     self.ffmpeg_path,
                     "-y",
                     "-threads",
-                    str(settings.FFMPEG_THREADS),
+                    str(getattr(settings, "FFMPEG_THREADS", 2)),
                     "-f",
                     "concat",
                     "-safe",
@@ -497,7 +522,7 @@ class FFmpegEngine:
                     "+faststart",
                     str(output_path),
                 ])
-                fb_proc = subprocess.run(fallback_cmd, cwd=str(staging_dir), capture_output=True, text=True, timeout=60)
+                fb_proc = subprocess.run(fallback_cmd, cwd=str(staging_dir), capture_output=True, text=True, timeout=120)
                 if fb_proc.returncode != 0:
                     fb_tail = fb_proc.stderr[-400:].strip() if len(fb_proc.stderr) > 400 else fb_proc.stderr.strip()
                     raise RenderFailedError(
@@ -505,7 +530,7 @@ class FFmpegEngine:
                     )
             else:
                 raise RenderFailedError(
-                    f"FFmpeg assembly failed for aspect ratio {aspect_ratio}: {err_tail}"
+                    f"FFmpeg assembly failed for aspect ratio {aspect_ratio}: {str(enc_err)}"
                 )
 
         # 4. Rigorous validation of the resulting output file
