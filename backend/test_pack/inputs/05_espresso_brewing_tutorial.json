@@ -1,0 +1,10 @@
+{
+  "name": "espresso_brewing_tutorial",
+  "script": "Grind fresh roasted coffee beans to an even, silky consistency. Tamp the espresso grounds firmly into the metal portafilter basket. Watch rich golden crema pour steadily into the ceramic cup. Steam creamy whole milk to pour smooth latte art on top.",
+  "voice": "en-us-male",
+  "aspect_ratios": ["9:16", "16:9"],
+  "captions": {
+    "burn_in": true,
+    "srt": true
+  }
+}

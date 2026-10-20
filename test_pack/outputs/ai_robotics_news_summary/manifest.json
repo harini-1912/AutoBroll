@@ -1,0 +1,94 @@
+{
+  "job_id": "batch-1792463331063-ai_robotics_news_summary",
+  "created_at": "2026-10-20T02:28:51.063476+00:00",
+  "started_at": "2026-10-20T02:28:51.066934+00:00",
+  "completed_at": "2026-10-20T02:29:50.507539+00:00",
+  "total_processing_time_seconds": 59.441,
+  "seed": 42,
+  "settings": {
+    "name": "ai_robotics_news_summary",
+    "script": "Autonomous logistics robots are revolutionizing global fulfillment warehouses. Advanced computer vision guides robotic arms handling complex packages seamlessly. Supply chains worldwide are accelerating delivery times through intelligent automation.",
+    "voice": "en-us-male",
+    "aspect_ratios": [
+      "16:9",
+      "1:1"
+    ],
+    "captions": {
+      "burn_in": true,
+      "srt": true
+    }
+  },
+  "models_and_providers": [
+    {
+      "name": "gtts",
+      "version": "1.0",
+      "purpose": "TTS Synthesis"
+    },
+    {
+      "name": "pixabay",
+      "version": "1.0",
+      "purpose": "Primary Footage Search"
+    }
+  ],
+  "timings": {
+    "validation": 0.003,
+    "ingestion": 0.002,
+    "speech": 2.724,
+    "segmentation": 0.004,
+    "footage_search": 31.241,
+    "timeline": 0.002,
+    "captions": 0.002,
+    "rendering": 25.378,
+    "output_validation": 0.08
+  },
+  "cost_estimate": {
+    "footage_usd": 0.0,
+    "tts_usd": 0.001,
+    "compute_usd": 0.02972,
+    "total_usd": 0.03072
+  },
+  "warnings": [],
+  "licence_and_rights": {
+    "commercial_use_cleared": true,
+    "all_clips_licensed": true,
+    "contains_real_stock_footage": true,
+    "contains_ai_media": false
+  },
+  "narration_alignment": {
+    "primary_method": "tts_timestamps",
+    "average_confidence": 0.95,
+    "scene_count": 3,
+    "total_duration": 17.86
+  },
+  "outputs": {
+    "video_16_9": {
+      "aspect_ratio": "16:9",
+      "resolution": "1920x1080",
+      "fps": 30.0,
+      "codec": "h264",
+      "audio_codec": "aac",
+      "file_size_bytes": 10206204,
+      "duration_seconds": 17.86,
+      "url": "http://localhost:8000/api/v1/jobs/download/batch-1792463331063-ai_robotics_news_summary/video_16_9.mp4"
+    },
+    "video_1_1": {
+      "aspect_ratio": "1:1",
+      "resolution": "1080x1080",
+      "fps": 30.0,
+      "codec": "h264",
+      "audio_codec": "aac",
+      "file_size_bytes": 7393442,
+      "duration_seconds": 17.86,
+      "url": "http://localhost:8000/api/v1/jobs/download/batch-1792463331063-ai_robotics_news_summary/video_1_1.mp4"
+    }
+  },
+  "validation_results": {
+    "integrity_check": "passed",
+    "aspect_ratios_rendered": [
+      "16:9",
+      "1:1"
+    ],
+    "no_black_frames": true,
+    "no_audio_drift": true
+  }
+}

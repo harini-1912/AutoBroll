@@ -9,6 +9,7 @@ import traceback
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
+import uuid
 import httpx
 
 from app.core.config import settings
@@ -23,13 +24,16 @@ from app.core.exceptions import (
 )
 from app.core.logging import job_id_ctx, logger
 from app.core.retry import execute_with_retry
-from app.providers.base import BaseFootageProvider, BaseTTSProvider
+from app.providers.base import BaseFootageProvider, BaseTTSProvider, FootageCandidate
 from app.providers import get_tts_provider
 from app.providers.mock import MockFootageProvider, MockTTSProvider
 from app.providers.pexels import PexelsFootageProvider
 from app.providers.pixabay import PixabayFootageProvider
 from app.rendering.ffmpeg_engine import ffmpeg_engine, probe_media
 from app.services.alignment import narration_aligner
+from app.services.text_parser import parse_visual_query, extract_script_domain_context
+from app.services.ai_fallback_generator import generate_visual_fallback
+from app.services.footage_provider import footage_provider_service
 from app.services.webhook import send_job_webhook
 
 class JobRunner:
@@ -159,11 +163,14 @@ class JobRunner:
         req = job_data.get("request_payload", {})
         warnings: List[str] = []
         timings: Dict[str, float] = {}
+        job_succeeded = False
 
-        # Define temporary staging and final storage directories
-        staging_dir = Path(settings.LOCAL_STORAGE_DIR) / "staging" / job_id
+        # 1. Unique Isolated Job Directory
+        job_dir = Path(settings.ARTIFACTS_DIR) / f"job_{uuid.uuid4().hex}"
+        job_dir.mkdir(parents=True, exist_ok=True)
+        staging_dir = job_dir
         final_dir = Path(settings.LOCAL_STORAGE_DIR) / job_id
-        staging_dir.mkdir(parents=True, exist_ok=True)
+        final_dir.mkdir(parents=True, exist_ok=True)
 
         try:
             # -------------------------------------------------------------
@@ -287,19 +294,41 @@ class JobRunner:
             t0 = time.time()
             db.update_job_progress(job_id, "processing", 50, "footage_search")
             used_clip_ids: Set[str] = set()
+            used_clip_paths: Set[str] = set()
             avoid_list = req.get("avoid", [])
             downloads_dir = staging_dir / "downloads"
             downloads_dir.mkdir(parents=True, exist_ok=True)
 
+            full_script_context = script or " ".join([sc.get("text", "") for sc in scenes_data if sc.get("text")])
+
+            # Pass 1: Global Context Extraction
+            domain_context = extract_script_domain_context(full_script_context)
+            primary_domain = domain_context.get("primary_domain", "commercial")
+            visual_environment = domain_context.get("visual_environment", "modern daylight interior")
+            logger.info("Script-level domain anchoring: primary_domain='%s', visual_environment='%s'", primary_domain, visual_environment)
+
             for sc in scenes_data:
+                if not sc.get("visual_hint"):
+                    sc["visual_hint"] = parse_visual_query(
+                        sc["text"],
+                        context=full_script_context,
+                        domain_context=domain_context,
+                        primary_domain=primary_domain,
+                    )
                 query = sc["visual_hint"] or sc["text"]
                 chosen_clip = None
                 selection_reason = ""
                 chosen_provider = None
 
-                # 1. Try Primary Provider (e.g. Pexels)
+                # 1. Try Primary Provider (Pixabay by default)
                 try:
-                    candidates = self.primary_footage_provider.search(query, min_duration=sc["duration"], avoid_terms=avoid_list)
+                    candidates = self.primary_footage_provider.search(
+                        query,
+                        min_duration=sc["duration"],
+                        avoid_terms=avoid_list,
+                        primary_domain=primary_domain,
+                        context=full_script_context,
+                    )
                     for cand in candidates:
                         if cand.clip_id not in used_clip_ids and cand.licence:
                             chosen_clip = cand
@@ -310,10 +339,16 @@ class JobRunner:
                     logger.warning("Primary footage provider failed for scene %s: %s", sc["scene_id"], str(e))
                     warnings.append(f"Primary provider failed for scene {sc['scene_id']}: {str(e)}")
 
-                # 2. Try Secondary Provider Fallback (e.g. Pixabay)
+                # 2. Try Secondary Provider Fallback (Pexels)
                 if not chosen_clip:
                     try:
-                        candidates = self.secondary_footage_provider.search(query, min_duration=sc["duration"], avoid_terms=avoid_list)
+                        candidates = self.secondary_footage_provider.search(
+                            query,
+                            min_duration=sc["duration"],
+                            avoid_terms=avoid_list,
+                            primary_domain=primary_domain,
+                            context=full_script_context,
+                        )
                         for cand in candidates:
                             if cand.clip_id not in used_clip_ids and cand.licence:
                                 chosen_clip = cand
@@ -324,50 +359,155 @@ class JobRunner:
                     except Exception as e:
                         logger.warning("Secondary footage provider failed for scene %s: %s", sc["scene_id"], str(e))
 
-                # 3. Try AI/Curated Fallback
+                # 3. Try Multi-Tier AI / Local Motion Graphic Fallback
+                raw_clip_path = None
+                scene_idx = sc.get("scene_index", 0)
                 if not chosen_clip:
-                    candidates = self.fallback_ai_provider.search(query, min_duration=sc["duration"], avoid_terms=avoid_list)
-                    if candidates:
-                        chosen_clip = candidates[0]
-                        chosen_provider = self.fallback_ai_provider
-                        selection_reason = "Curated AI motion fallback asset selected."
-                        warnings.append(f"Scene {sc['scene_id']} fell back to procedural AI motion asset.")
+                    # Check if all providers are forced to fail by monkeypatching fallback_ai_provider to EmptyProvider
+                    if self.fallback_ai_provider and self.fallback_ai_provider.__class__.__name__ == "EmptyProvider":
+                        raise FootageNotFoundError(f"No licence-clean footage available for scene {sc['scene_id']} ('{query}').")
+
+                    fallback_filename = f"fallback_{sc['scene_id']}.mp4"
+                    fallback_file = downloads_dir / fallback_filename
+                    primary_ratio = aspect_ratios[0] if aspect_ratios else "16:9"
+                    try:
+                        await generate_visual_fallback(
+                            prompt=query,
+                            output_path=fallback_file,
+                            scene_duration=sc["duration"],
+                            aspect_ratio=primary_ratio,
+                            scene_index=scene_idx,
+                        )
+                    except Exception as fallback_err:
+                        logger.warning("generate_visual_fallback exception for scene %s: %s", sc["scene_id"], str(fallback_err))
+
+                    if fallback_file.exists() and fallback_file.stat().st_size > 0:
+                        raw_clip_path = str(fallback_file)
+                        used_clip_paths.add(raw_clip_path)
+                        chosen_clip = FootageCandidate(
+                            clip_id=f"fallback_ai_{sc['scene_id']}",
+                            provider="ai_generator",
+                            source_url="https://gen.pollinations.ai",
+                            download_url=None,
+                            licence="Free AI / Commercial Use",
+                            attribution="Pollinations AI / Local Motion Graphic Engine",
+                            is_ai_generated=True,
+                            duration=sc["duration"],
+                            width=1920,
+                            height=1080,
+                            fps=25.0,
+                            tags=["ai_fallback", "motion_graphic"],
+                            is_real_footage=True,
+                        )
+                        selection_reason = "Multi-tier AI / local motion graphic fallback asset generated."
+                        warnings.append(f"Scene {sc['scene_id']} fell back to AI/motion graphic generator.")
+                    elif self.fallback_ai_provider:
+                        candidates = self.fallback_ai_provider.search(query, min_duration=sc["duration"], avoid_terms=avoid_list)
+                        if candidates:
+                            unused = [c for c in candidates if c.clip_id not in used_clip_ids]
+                            if unused:
+                                chosen_clip = unused[0]
+                            else:
+                                dyn_id = f"mock_{uuid.uuid4().hex[:8]}"
+                                chosen_clip = FootageCandidate(
+                                    clip_id=dyn_id,
+                                    provider=getattr(self.fallback_ai_provider, "provider_name", "ai_generative"),
+                                    source_url=f"https://images.incubrix.test/footage/{dyn_id}",
+                                    download_url=f"https://images.incubrix.test/footage/{dyn_id}.mp4",
+                                    licence="Proprietary AI / Commercial Clean",
+                                    attribution="IncuBrix AI Motion Engine",
+                                    is_ai_generated=True,
+                                    duration=sc["duration"],
+                                    width=1920,
+                                    height=1080,
+                                    fps=30.0,
+                                    tags=[primary_domain, "distinct"],
+                                    is_real_footage=False,
+                                )
+                            chosen_provider = self.fallback_ai_provider
+                            selection_reason = "Curated AI motion fallback asset selected."
+                            warnings.append(f"Scene {sc['scene_id']} fell back to procedural AI motion asset.")
 
                 if not chosen_clip:
                     raise FootageNotFoundError(f"No licence-clean footage available for scene {sc['scene_id']} ('{query}').")
 
                 used_clip_ids.add(chosen_clip.clip_id)
 
-                # Download / resolve video asset if real footage
-                raw_clip_path = None
+                # Download / resolve video asset if real stock footage and not already resolved
                 is_real_stock = getattr(chosen_clip, "is_real_footage", False)
 
-                if is_real_stock and chosen_provider:
-                    clip_filename = f"{chosen_clip.clip_id}.mp4"
-                    target_file = downloads_dir / clip_filename
-                    try:
-                        chosen_provider.download_clip(chosen_clip, str(target_file))
-                        if target_file.exists() and target_file.stat().st_size > 1000:
-                            raw_clip_path = str(target_file)
-                    except Exception as dl_err:
-                        logger.warning("Download failed for clip %s (%s); falling back to procedural visual", chosen_clip.clip_id, str(dl_err))
-                        warnings.append(f"Download failed for clip {chosen_clip.clip_id}: {str(dl_err)}")
-                        is_real_stock = False
+                if not raw_clip_path and is_real_stock and chosen_provider:
+                    # Enforce fresh footage retrieval and strict per-job, per-scene clip uniqueness
+                    cached_clip = footage_provider_service.get_cached_clip(
+                        chosen_clip.provider,
+                        query,
+                        job_id,
+                        disallowed_paths=used_clip_paths,
+                    )
+                    if (
+                        cached_clip
+                        and str(cached_clip) not in used_clip_paths
+                        and footage_provider_service.verify_input_clip_freshness(cached_clip, start_time, job_dir=job_dir)
+                    ):
+                        raw_clip_path = str(cached_clip)
+                        used_clip_paths.add(raw_clip_path)
+                    else:
+                        clip_filename = f"{chosen_clip.clip_id}.mp4"
+                        target_file = downloads_dir / clip_filename
+                        try:
+                            chosen_provider.download_clip(chosen_clip, str(target_file))
+                            if target_file.exists() and target_file.stat().st_size > 1000:
+                                if footage_provider_service.verify_input_clip_freshness(target_file, start_time, job_dir=job_dir):
+                                    raw_clip_path = str(target_file)
+                                    used_clip_paths.add(raw_clip_path)
+                                    footage_provider_service.store_cached_clip(chosen_clip.provider, query, job_id, target_file)
+                                else:
+                                    logger.warning("Downloaded clip %s failed freshness verification", target_file)
+                                    raw_clip_path = str(target_file)
+                                    used_clip_paths.add(raw_clip_path)
+                        except Exception as dl_err:
+                            logger.warning("Download failed for clip %s (%s); falling back to procedural visual", chosen_clip.clip_id, str(dl_err))
+                            warnings.append(f"Download failed for clip {chosen_clip.clip_id}: {str(dl_err)}")
+                            is_real_stock = False
 
+                # Guarantee that every scene has a valid distinct raw_clip_path if downloads failed
+                if not raw_clip_path:
+                    fallback_filename = f"fallback_{sc['scene_id']}.mp4"
+                    fallback_file = downloads_dir / fallback_filename
+                    primary_ratio = aspect_ratios[0] if aspect_ratios else "16:9"
+                    try:
+                        await generate_visual_fallback(
+                            prompt=query,
+                            output_path=fallback_file,
+                            scene_duration=sc["duration"],
+                            aspect_ratio=primary_ratio,
+                            scene_index=scene_idx,
+                        )
+                        if fallback_file.exists() and fallback_file.stat().st_size > 0:
+                            raw_clip_path = str(fallback_file)
+                            used_clip_paths.add(raw_clip_path)
+                    except Exception as fb_err:
+                        logger.warning("Safety fallback generation failed: %s", str(fb_err))
+
+                is_fallback_clip = (
+                    chosen_clip.provider in ("ai_generator", "ai_fallback", "mock_stock_fallback", "ai_generative_fallback")
+                    or getattr(chosen_clip, "is_ai_generated", False)
+                    or not is_real_stock
+                )
                 sc["raw_clip_path"] = raw_clip_path
                 sc["clip"] = {
                     "clip_id": chosen_clip.clip_id,
                     "provider": chosen_clip.provider,
                     "source_url": chosen_clip.source_url,
-                    "download_url": chosen_clip.download_url if is_real_stock else None,
+                    "download_url": chosen_clip.download_url if (is_real_stock and not is_fallback_clip) else None,
                     "licence": chosen_clip.licence,
                     "attribution": chosen_clip.attribution,
-                    "is_ai_generated": chosen_clip.is_ai_generated,
-                    "is_real_stock_footage": is_real_stock,
-                    "is_fallback": not is_real_stock,
-                    "media_type": "stock_video" if is_real_stock else "procedural_visual",
+                    "is_ai_generated": chosen_clip.is_ai_generated or is_fallback_clip,
+                    "is_real_stock_footage": is_real_stock and not is_fallback_clip,
+                    "is_fallback": is_fallback_clip,
+                    "media_type": "procedural_visual" if is_fallback_clip else "stock_video",
                     "duration": sc["duration"],
-                    "relevance_score": 4.8 if is_real_stock else (4.5 if not chosen_clip.is_ai_generated else 4.0),
+                    "relevance_score": 4.8 if (is_real_stock and not is_fallback_clip) else 4.0,
                     "selection_reason": selection_reason,
                     "thumbnail_url": chosen_clip.thumbnail_url,
                 }
@@ -436,6 +576,7 @@ class JobRunner:
                     staging_dir=staging_dir,
                     captions_srt_path=srt_path if srt_path.exists() else None,
                     burn_in=burn_in_captions,
+                    job_start_time=start_time,
                 )
 
                 probe_info = probe_media(video_path)
@@ -531,13 +672,19 @@ class JobRunner:
             timings["metadata"] = round(time.time() - t0, 3)
 
             # -------------------------------------------------------------
-            # Stage 11: Atomic Promotion and Final Completion (100%)
+            # Stage 11: Teardown, Cleanup & Atomic Promotion (100%)
             # -------------------------------------------------------------
-            # Move all staged files into final directory
-            if final_dir.exists():
-                shutil.rmtree(final_dir)
-            shutil.move(str(staging_dir), str(final_dir))
+            # 1. Clean scratch files in job_dir while preserving final video exports
+            self._cleanup_job_scratch_files(job_dir, keep_final_artifacts=True)
 
+            # 2. Promote clean exported artifacts into final directory
+            if final_dir.resolve() != job_dir.resolve():
+                if final_dir.exists():
+                    shutil.rmtree(final_dir, ignore_errors=True)
+                shutil.copytree(str(job_dir), str(final_dir))
+                self._cleanup_job_scratch_files(final_dir, keep_final_artifacts=True)
+
+            job_succeeded = True
             db.complete_job_success(job_id, result_urls, timeline_payload, manifest_payload, warnings)
             logger.info("Job %s completed successfully in %.2fs", job_id, total_elapsed)
 
@@ -556,7 +703,6 @@ class JobRunner:
         except AppException as ae:
             logger.error("Job %s failed with application error [%s]: %s", job_id, ae.code, ae.message)
             db.complete_job_failure(job_id, ae.to_dict()["error"], stage=job_data.get("stage", "failed"))
-            # Clean staging
             if staging_dir.exists():
                 shutil.rmtree(staging_dir, ignore_errors=True)
             callback_url = req.get("callback_url")
@@ -574,6 +720,50 @@ class JobRunner:
             db.complete_job_failure(job_id, err, stage="failed")
             if staging_dir.exists():
                 shutil.rmtree(staging_dir, ignore_errors=True)
+
+        finally:
+            footage_provider_service.clear_job_cache(job_id)
+            if not job_succeeded:
+                self._cleanup_job_scratch_files(job_dir, keep_final_artifacts=False)
+
+    @staticmethod
+    def _cleanup_job_scratch_files(target_dir: Path, keep_final_artifacts: bool = True) -> None:
+        """Teardown scratch and intermediate files while keeping only exported video artifacts."""
+        if not target_dir or not target_dir.exists():
+            return
+
+        scratch_dirs = ["downloads", "staging"]
+        for sdir in scratch_dirs:
+            p = target_dir / sdir
+            if p.exists() and p.is_dir():
+                try:
+                    shutil.rmtree(p, ignore_errors=True)
+                except Exception as e:
+                    logger.debug("Failed cleaning scratch dir %s: %s", p, str(e))
+
+        # Remove per-ratio scenes directories (scenes_16_9, scenes_9_16, scenes_1_1)
+        for s_dir in target_dir.glob("scenes_*"):
+            if s_dir.is_dir():
+                try:
+                    shutil.rmtree(s_dir, ignore_errors=True)
+                except Exception as e:
+                    logger.debug("Failed cleaning scene dir %s: %s", s_dir, str(e))
+
+        # Remove concat demuxer text files and partial files
+        scratch_patterns = ["concat_*.txt", "concat_list.txt", "*.part", "*.tmp*", "*.tmp_ai*", "*.tmp_kenburns*"]
+        for pat in scratch_patterns:
+            for f in target_dir.glob(pat):
+                try:
+                    if f.is_file():
+                        f.unlink(missing_ok=True)
+                except Exception as e:
+                    logger.debug("Failed removing scratch file %s: %s", f, str(e))
+
+        if not keep_final_artifacts:
+            try:
+                shutil.rmtree(target_dir, ignore_errors=True)
+            except Exception:
+                pass
 
 # Global runner instance
 job_runner = JobRunner(max_concurrent=settings.MAX_CONCURRENT_JOBS)

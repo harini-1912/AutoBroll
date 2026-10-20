@@ -17,6 +17,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from app.core.config import settings
 from app.core.database import db
 from app.core.exceptions import (
+    AppException,
     FootageNotFoundError,
     InvalidInputError,
     JobNotFoundError,
@@ -29,6 +30,7 @@ from app.providers.base import BaseFootageProvider, FootageCandidate
 from app.providers.mock import MockFootageProvider
 from app.rendering.ffmpeg_engine import ffmpeg_engine, probe_media
 from app.schemas.job import SceneClipReplacementRequest, SceneClipReplacementResponse
+from app.services.video_downloader import fetch_video_from_url
 from app.workers.job_runner import job_runner
 
 
@@ -411,39 +413,32 @@ class SceneSwapper:
         # Handle custom video_url input
         if swap_req.video_url:
             v_url = swap_req.video_url.strip()
-            if any(bad in v_url for bad in ("..", "file://")):
-                raise InvalidInputError("Invalid video_url provided.")
-            if v_url.startswith("http://") or v_url.startswith("https://"):
-                target_raw = staging_dir / f"swap_raw_{scene_id}.mp4"
-                try:
-                    import httpx
-                    with httpx.Client(timeout=15.0) as client:
-                        resp = client.get(v_url)
-                        resp.raise_for_status()
-                        target_raw.write_bytes(resp.content)
-                    probe = probe_media(target_raw)
-                    if probe.get("is_valid") and probe.get("has_video"):
-                        cand = FootageCandidate(
-                            clip_id=f"custom_url_{scene_id}",
-                            provider="custom_url",
-                            source_url=v_url,
-                            download_url=v_url,
-                            licence="User Provided",
-                            attribution="Custom Video Upload",
-                            is_ai_generated=False,
-                            duration=probe.get("duration", 10.0),
-                            width=1920,
-                            height=1080,
-                            fps=30.0,
-                            tags=["custom"],
-                            is_real_footage=True,
-                        )
-                        return cand, target_raw, "custom_url", True
-                    else:
-                        raise InvalidInputError("video_url content is not a valid video.")
-                except Exception as e:
-                    logger.warning("Custom video_url download failed: %s", str(e))
-                    raise InvalidInputError(f"Could not download or validate video from video_url: {str(e)}")
+            target_raw = staging_dir / f"swap_raw_{scene_id}.mp4"
+            try:
+                downloaded_file = await fetch_video_from_url(v_url, target_raw)
+            except AppException:
+                raise
+            except Exception as e:
+                logger.warning("Custom video_url download failed: %s", str(e))
+                raise InvalidInputError(f"Could not download or validate video from video_url: {str(e)}")
+
+            probe = probe_media(downloaded_file)
+            cand = FootageCandidate(
+                clip_id=f"custom_url_{scene_id}",
+                provider="custom_url",
+                source_url=v_url,
+                download_url=v_url,
+                licence="User Provided",
+                attribution="Custom Video Upload",
+                is_ai_generated=False,
+                duration=probe.get("duration", 10.0),
+                width=probe.get("width") or 1920,
+                height=probe.get("height") or 1080,
+                fps=probe.get("fps") or 30.0,
+                tags=["custom"],
+                is_real_footage=True,
+            )
+            return cand, downloaded_file, "custom_url", True
 
         # Check for specific clip_id request
         if swap_req.clip_id:

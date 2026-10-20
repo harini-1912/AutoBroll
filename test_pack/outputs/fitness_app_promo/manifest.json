@@ -1,0 +1,94 @@
+{
+  "job_id": "batch-1792463115952-fitness_app_promo",
+  "created_at": "2026-10-20T02:25:15.952683+00:00",
+  "started_at": "2026-10-20T02:25:15.955327+00:00",
+  "completed_at": "2026-10-20T02:26:47.998755+00:00",
+  "total_processing_time_seconds": 92.043,
+  "seed": 42,
+  "settings": {
+    "name": "fitness_app_promo",
+    "script": "Athletes push their limits every morning in high intensity training. Smart sensors track heart rate, stamina, and muscular recovery in real time. Reach peak performance with personalized algorithmic coaching in your pocket.",
+    "voice": "en-us-female",
+    "aspect_ratios": [
+      "9:16",
+      "1:1"
+    ],
+    "captions": {
+      "burn_in": true,
+      "srt": true
+    }
+  },
+  "models_and_providers": [
+    {
+      "name": "gtts",
+      "version": "1.0",
+      "purpose": "TTS Synthesis"
+    },
+    {
+      "name": "pixabay",
+      "version": "1.0",
+      "purpose": "Primary Footage Search"
+    }
+  ],
+  "timings": {
+    "validation": 0.001,
+    "ingestion": 0.001,
+    "speech": 4.393,
+    "segmentation": 0.003,
+    "footage_search": 57.035,
+    "timeline": 0.002,
+    "captions": 0.002,
+    "rendering": 30.536,
+    "output_validation": 0.066
+  },
+  "cost_estimate": {
+    "footage_usd": 0.0,
+    "tts_usd": 0.001,
+    "compute_usd": 0.04602,
+    "total_usd": 0.04702
+  },
+  "warnings": [],
+  "licence_and_rights": {
+    "commercial_use_cleared": true,
+    "all_clips_licensed": true,
+    "contains_real_stock_footage": true,
+    "contains_ai_media": false
+  },
+  "narration_alignment": {
+    "primary_method": "tts_timestamps",
+    "average_confidence": 0.95,
+    "scene_count": 3,
+    "total_duration": 16.56
+  },
+  "outputs": {
+    "video_9_16": {
+      "aspect_ratio": "9:16",
+      "resolution": "1080x1920",
+      "fps": 30.0,
+      "codec": "h264",
+      "audio_codec": "aac",
+      "file_size_bytes": 15120911,
+      "duration_seconds": 16.56,
+      "url": "http://localhost:8000/api/v1/jobs/download/batch-1792463115952-fitness_app_promo/video_9_16.mp4"
+    },
+    "video_1_1": {
+      "aspect_ratio": "1:1",
+      "resolution": "1080x1080",
+      "fps": 30.0,
+      "codec": "h264",
+      "audio_codec": "aac",
+      "file_size_bytes": 10514194,
+      "duration_seconds": 16.56,
+      "url": "http://localhost:8000/api/v1/jobs/download/batch-1792463115952-fitness_app_promo/video_1_1.mp4"
+    }
+  },
+  "validation_results": {
+    "integrity_check": "passed",
+    "aspect_ratios_rendered": [
+      "9:16",
+      "1:1"
+    ],
+    "no_black_frames": true,
+    "no_audio_drift": true
+  }
+}

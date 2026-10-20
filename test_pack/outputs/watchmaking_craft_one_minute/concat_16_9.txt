@@ -1,0 +1,8 @@
+file 'scenes_16_9/clip_000.mp4'
+file 'scenes_16_9/clip_001.mp4'
+file 'scenes_16_9/clip_002.mp4'
+file 'scenes_16_9/clip_003.mp4'
+file 'scenes_16_9/clip_004.mp4'
+file 'scenes_16_9/clip_005.mp4'
+file 'scenes_16_9/clip_006.mp4'
+file 'scenes_16_9/clip_007.mp4'

@@ -1,0 +1,127 @@
+{
+  "job_id": "batch-1792463578388-watchmaking_craft_one_mi",
+  "created_at": "2026-10-20T02:32:58.388757+00:00",
+  "started_at": "2026-10-20T02:32:58.391967+00:00",
+  "completed_at": "2026-10-20T02:40:03.178477+00:00",
+  "total_processing_time_seconds": 424.787,
+  "seed": 42,
+  "settings": {
+    "name": "watchmaking_craft_one_minute",
+    "voice": "en-gb-male",
+    "aspect_ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "captions": {
+      "burn_in": true,
+      "srt": true
+    },
+    "scenes": [
+      {
+        "text": "Deep inside a traditional horology workshop, master craftsmen breathe life into mechanical watches.",
+        "visual_hint": "watchmaker mechanical watch workshop"
+      },
+      {
+        "text": "Hundreds of microscopic brass gears and polished ruby jewels assemble with microscopic precision.",
+        "visual_hint": "watch gears mechanical cogs"
+      },
+      {
+        "text": "The balance wheel oscillates steadily back and forth, dividing every second into five precise beats.",
+        "visual_hint": "watch movement balance wheel"
+      },
+      {
+        "text": "Tension stored within the wound mainspring gently transfers through the complex escapement mechanism.",
+        "visual_hint": "clock mechanism gears turning"
+      },
+      {
+        "text": "Intricate hand-engraved bridges and sapphire crystal dials reflect soft ambient workshop lights.",
+        "visual_hint": "luxury watch dial sapphire"
+      },
+      {
+        "text": "Every finished timepiece represents hundreds of patient hours of uncompromising artisan devotion.",
+        "visual_hint": "watchmaker craftsman assembling watch"
+      },
+      {
+        "text": "Generations of ancestral wisdom preserve this intricate craft of miniature mechanical engineering.",
+        "visual_hint": "artisan jeweler precision tools"
+      },
+      {
+        "text": "In a world dominated by disposable digital gadgets, mechanical horology remains timeless art.",
+        "visual_hint": "vintage mechanical pocket watch"
+      }
+    ]
+  },
+  "models_and_providers": [
+    {
+      "name": "gtts",
+      "version": "1.0",
+      "purpose": "TTS Synthesis"
+    },
+    {
+      "name": "pixabay",
+      "version": "1.0",
+      "purpose": "Primary Footage Search"
+    }
+  ],
+  "timings": {
+    "validation": 0.002,
+    "ingestion": 0.001,
+    "speech": 7.103,
+    "segmentation": 0.005,
+    "footage_search": 209.65,
+    "timeline": 0.003,
+    "captions": 0.004,
+    "rendering": 207.914,
+    "output_validation": 0.102
+  },
+  "cost_estimate": {
+    "footage_usd": 0.0,
+    "tts_usd": 0.001,
+    "compute_usd": 0.21239,
+    "total_usd": 0.21339
+  },
+  "warnings": [],
+  "licence_and_rights": {
+    "commercial_use_cleared": true,
+    "all_clips_licensed": true,
+    "contains_real_stock_footage": true,
+    "contains_ai_media": false
+  },
+  "narration_alignment": {
+    "primary_method": "tts_timestamps",
+    "average_confidence": 0.95,
+    "scene_count": 8,
+    "total_duration": 57.74
+  },
+  "outputs": {
+    "video_16_9": {
+      "aspect_ratio": "16:9",
+      "resolution": "1920x1080",
+      "fps": 30.0,
+      "codec": "h264",
+      "audio_codec": "aac",
+      "file_size_bytes": 28913314,
+      "duration_seconds": 57.73,
+      "url": "http://localhost:8000/api/v1/jobs/download/batch-1792463578388-watchmaking_craft_one_mi/video_16_9.mp4"
+    },
+    "video_9_16": {
+      "aspect_ratio": "9:16",
+      "resolution": "1080x1920",
+      "fps": 30.0,
+      "codec": "h264",
+      "audio_codec": "aac",
+      "file_size_bytes": 25463228,
+      "duration_seconds": 57.73,
+      "url": "http://localhost:8000/api/v1/jobs/download/batch-1792463578388-watchmaking_craft_one_mi/video_9_16.mp4"
+    }
+  },
+  "validation_results": {
+    "integrity_check": "passed",
+    "aspect_ratios_rendered": [
+      "16:9",
+      "9:16"
+    ],
+    "no_black_frames": true,
+    "no_audio_drift": true
+  }
+}

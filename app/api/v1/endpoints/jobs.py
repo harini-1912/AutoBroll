@@ -237,15 +237,36 @@ async def swap_scene_clip(
     "/download/{job_id}/{filename}",
     summary="Download Generated Asset or Metadata",
 )
+@router.get(
+    "/artifacts/{job_id}/{filename}",
+    summary="Download Generated Asset or Metadata (Artifact alias)",
+    include_in_schema=False,
+)
+@router.get(
+    "/{job_id}/artifacts/{filename}",
+    summary="Download Generated Asset or Metadata (Standard artifact alias)",
+    include_in_schema=False,
+)
 def download_asset(job_id: str, filename: str):
     """Serve output video, SRT, timeline, or manifest file with strict containment."""
     # Validate job_id to prevent path traversal
     if ".." in job_id or "/" in job_id or "\\" in job_id:
         raise InvalidInputError(f"Invalid characters in job_id: '{job_id}'")
 
-    safe_name = Path(filename).name
-    if not safe_name or safe_name in (".", "..") or ".." in filename:
+    raw_name = Path(filename).name
+    if not raw_name or raw_name in (".", "..") or ".." in filename:
         raise InvalidInputError(f"Invalid filename: '{filename}'")
+
+    # Map common asset keys without extension to disk filename
+    key_to_file = {
+        "video_16_9": "video_16_9.mp4",
+        "video_9_16": "video_9_16.mp4",
+        "video_1_1": "video_1_1.mp4",
+        "captions_srt": "captions.srt",
+        "timeline_json": "timeline.json",
+        "manifest_json": "manifest.json",
+    }
+    safe_name = key_to_file.get(raw_name, raw_name)
 
     storage_root = Path(settings.LOCAL_STORAGE_DIR).resolve()
     target_file = (storage_root / job_id / safe_name).resolve()
@@ -256,23 +277,40 @@ def download_asset(job_id: str, filename: str):
     except ValueError:
         raise InvalidInputError("Path traversal outside storage directory detected.")
 
+    # Determine asset_key, media_type, and attachment headers
+    if safe_name.endswith(".mp4") or raw_name.startswith("video_"):
+        asset_key = raw_name[:-4] if raw_name.endswith(".mp4") else raw_name
+        download_filename = f"{asset_key}.mp4"
+        media_type = "video/mp4"
+        headers = {"Content-Disposition": f'attachment; filename="{download_filename}"'}
+    elif safe_name.endswith(".json"):
+        download_filename = safe_name
+        media_type = "application/json"
+        headers = {"Content-Disposition": f'attachment; filename="{safe_name}"'}
+    elif safe_name.endswith(".srt"):
+        download_filename = safe_name
+        media_type = "text/plain; charset=utf-8"
+        headers = {"Content-Disposition": f'attachment; filename="{safe_name}"'}
+    else:
+        download_filename = safe_name
+        media_type = "application/octet-stream"
+        headers = {"Content-Disposition": f'attachment; filename="{safe_name}"'}
+
     if not target_file.exists():
         # Check storage backend
         storage = get_storage()
         rel_path = f"{job_id}/{safe_name}"
         if storage.exists(rel_path):
             data = storage.get_file_bytes(rel_path)
-            media_type = "video/mp4" if safe_name.endswith(".mp4") else "application/octet-stream"
-            return Response(content=data, media_type=media_type)
+            return Response(content=data, media_type=media_type, headers=headers)
         raise JobNotFoundError(f"File '{safe_name}' for job '{job_id}' not found.")
 
-    media_type = "video/mp4" if safe_name.endswith(".mp4") else "application/octet-stream"
-    if safe_name.endswith(".json"):
-        media_type = "application/json"
-    elif safe_name.endswith(".srt"):
-        media_type = "text/plain; charset=utf-8"
-
-    return FileResponse(path=str(target_file), filename=safe_name, media_type=media_type)
+    return FileResponse(
+        path=str(target_file),
+        filename=download_filename,
+        media_type=media_type,
+        headers=headers,
+    )
 
 def _build_job_response(job_dict: Dict[str, Any]) -> JobResponse:
     job_id = job_dict["job_id"]

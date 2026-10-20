@@ -31,6 +31,7 @@ class PexelsFootageProvider(BaseFootageProvider):
         query: str,
         min_duration: float = 3.0,
         avoid_terms: Optional[List[str]] = None,
+        **kwargs,
     ) -> List[FootageCandidate]:
         """Search Pexels for relevant licence-clean commercial stock video clips."""
         if not self.is_configured():
@@ -65,62 +66,98 @@ class PexelsFootageProvider(BaseFootageProvider):
 
         videos = data.get("videos", [])
         candidates: List[FootageCandidate] = []
-
         for v in videos:
-            v_id = str(v.get("id", ""))
-            v_duration = float(v.get("duration", 0.0))
-            v_url = v.get("url", f"https://www.pexels.com/video/{v_id}")
-            user_info = v.get("user", {}) or {}
-            user_name = user_info.get("name") or "Pexels Creator"
-            user_url = user_info.get("url") or "https://www.pexels.com"
-            v_tags = [t.lower() for t in v.get("tags", []) if isinstance(t, str)]
-
-            # Check avoid terms
-            if any(term in " ".join(v_tags) or term in v_url.lower() for term in avoid):
-                continue
-
-            # Pick best video file (prefer mp4, HD width >= 1280)
-            video_files = v.get("video_files", []) or []
-            mp4_files = [
-                vf for vf in video_files
-                if vf.get("file_type") == "video/mp4" or (vf.get("link") and ".mp4" in vf.get("link", ""))
-            ]
-            if not mp4_files:
-                mp4_files = video_files
-
-            if not mp4_files:
-                continue
-
-            # Sort by width descending to get best resolution, prefer 1920 or 1280
-            best_file = max(
-                mp4_files,
-                key=lambda f: (f.get("width", 0) <= 1920, f.get("width", 0)),
-            )
-
-            download_link = best_file.get("link")
-            if not download_link:
-                continue
-
-            cand = FootageCandidate(
-                clip_id=f"pexels_{v_id}",
-                provider="pexels",
-                source_url=v_url,
-                download_url=download_link,
-                licence="Pexels License (Free for commercial use, no attribution required)",
-                attribution=f"Video by {user_name} on Pexels ({user_url})",
-                is_ai_generated=False,
-                duration=v_duration,
-                width=best_file.get("width") or v.get("width", 1920),
-                height=best_file.get("height") or v.get("height", 1080),
-                fps=float(best_file.get("fps") or 30.0),
-                tags=v_tags,
-                thumbnail_url=v.get("image"),
-                is_real_footage=True,
-            )
-            candidates.append(cand)
+            cand = self._parse_video(v, avoid=avoid)
+            if cand:
+                candidates.append(cand)
 
         logger.info("Pexels search returned %d valid candidates for '%s'", len(candidates), clean_query[:30])
         return candidates
+
+    def _parse_video(
+        self,
+        v: Dict[str, Any],
+        avoid: Optional[List[str]] = None,
+    ) -> Optional[FootageCandidate]:
+        """Safely parse a Pexels video object into a validated FootageCandidate."""
+        avoid_list = avoid or []
+        v_id = str(v.get("id", ""))
+        v_duration = float(v.get("duration", 0.0))
+        v_url = v.get("url", f"https://www.pexels.com/video/{v_id}")
+        user_info = v.get("user", {}) or {}
+        user_name = user_info.get("name") or "Pexels Creator"
+        user_url = user_info.get("url") or "https://www.pexels.com"
+        v_tags = [t.lower() for t in v.get("tags", []) if isinstance(t, str)]
+
+        # Check avoid terms
+        if any(term in " ".join(v_tags) or term in v_url.lower() for term in avoid_list):
+            return None
+
+        # Pick best video file (prefer mp4, HD width >= 1280)
+        video_files = v.get("video_files", []) or []
+        mp4_files = [
+            vf for vf in video_files
+            if vf.get("file_type") == "video/mp4" or (vf.get("link") and ".mp4" in vf.get("link", ""))
+        ]
+        if not mp4_files:
+            mp4_files = video_files
+
+        if not mp4_files:
+            return None
+
+        # Sort by width descending to get best resolution, prefer 1920 or 1280
+        best_file = max(
+            mp4_files,
+            key=lambda f: (f.get("width", 0) <= 1920, f.get("width", 0)),
+        )
+
+        download_link = best_file.get("link")
+        if not download_link:
+            return None
+
+        return FootageCandidate(
+            clip_id=f"pexels_{v_id}",
+            provider="pexels",
+            source_url=v_url,
+            download_url=download_link,
+            licence="Pexels License (Free for commercial use, no attribution required)",
+            attribution=f"Video by {user_name} on Pexels ({user_url})",
+            is_ai_generated=False,
+            duration=v_duration,
+            width=best_file.get("width") or v.get("width", 1920),
+            height=best_file.get("height") or v.get("height", 1080),
+            fps=float(best_file.get("fps") or 30.0),
+            tags=v_tags,
+            thumbnail_url=v.get("image"),
+            is_real_footage=True,
+        )
+
+    def get_by_id(self, media_id: str) -> Optional[FootageCandidate]:
+        """Fetch footage candidate directly by numeric Pexels video ID."""
+        if not self.is_configured():
+            logger.debug("PexelsFootageProvider: No API key configured; skipping get_by_id.")
+            return None
+
+        clean_id = str(media_id).strip()
+        url = f"https://api.pexels.com/videos/videos/{clean_id}"
+        headers = {
+            "Authorization": self.api_key,
+            "User-Agent": "IncuBrix-B-Roll-Engine/1.0",
+        }
+        try:
+            with httpx.Client(timeout=self.timeout) as client:
+                resp = client.get(url, headers=headers)
+                if resp.status_code != 200:
+                    logger.warning("Pexels API get_by_id (%s) returned status %d", clean_id, resp.status_code)
+                    return None
+                data = resp.json()
+        except Exception as e:
+            logger.warning("Pexels API get_by_id failed for ID '%s': %s", clean_id, str(e))
+            return None
+
+        if isinstance(data, dict):
+            return self._parse_video(data)
+        return None
 
     def download_clip(
         self,

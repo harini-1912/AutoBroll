@@ -142,7 +142,13 @@ class MockFootageProvider(BaseFootageProvider):
             ),
         ]
 
-    def search(self, query: str, min_duration: float = 3.0, avoid_terms: Optional[List[str]] = None) -> List[FootageCandidate]:
+    def search(
+        self,
+        query: str,
+        min_duration: float = 3.0,
+        avoid_terms: Optional[List[str]] = None,
+        **kwargs,
+    ) -> List[FootageCandidate]:
         q_lower = query.lower()
         avoid = [a.lower() for a in (avoid_terms or [])]
 
@@ -167,3 +173,10 @@ class MockFootageProvider(BaseFootageProvider):
         if not target.exists():
             target.write_bytes(b"\x00" * 1024)  # placeholder bytes for mock
         return str(target)
+
+    def get_by_id(self, media_id: str) -> Optional[FootageCandidate]:
+        clean_id = str(media_id).strip()
+        for cand in self._library:
+            if cand.clip_id == clean_id or cand.clip_id.endswith(f"_{clean_id}") or f"_{clean_id}" in cand.clip_id:
+                return cand
+        return None

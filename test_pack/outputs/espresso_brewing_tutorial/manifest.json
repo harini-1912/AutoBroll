@@ -1,0 +1,94 @@
+{
+  "job_id": "batch-1792463068182-espresso_brewing_tutoria",
+  "created_at": "2026-10-20T02:24:28.182006+00:00",
+  "started_at": "2026-10-20T02:24:28.184988+00:00",
+  "completed_at": "2026-10-20T02:25:15.904896+00:00",
+  "total_processing_time_seconds": 47.72,
+  "seed": 42,
+  "settings": {
+    "name": "espresso_brewing_tutorial",
+    "script": "Grind fresh roasted coffee beans to an even, silky consistency. Tamp the espresso grounds firmly into the metal portafilter basket. Watch rich golden crema pour steadily into the ceramic cup. Steam creamy whole milk to pour smooth latte art on top.",
+    "voice": "en-us-male",
+    "aspect_ratios": [
+      "9:16",
+      "16:9"
+    ],
+    "captions": {
+      "burn_in": true,
+      "srt": true
+    }
+  },
+  "models_and_providers": [
+    {
+      "name": "gtts",
+      "version": "1.0",
+      "purpose": "TTS Synthesis"
+    },
+    {
+      "name": "pixabay",
+      "version": "1.0",
+      "purpose": "Primary Footage Search"
+    }
+  ],
+  "timings": {
+    "validation": 0.001,
+    "ingestion": 0.001,
+    "speech": 4.356,
+    "segmentation": 0.002,
+    "footage_search": 12.054,
+    "timeline": 0.002,
+    "captions": 0.003,
+    "rendering": 31.219,
+    "output_validation": 0.079
+  },
+  "cost_estimate": {
+    "footage_usd": 0.0,
+    "tts_usd": 0.001,
+    "compute_usd": 0.02386,
+    "total_usd": 0.02486
+  },
+  "warnings": [],
+  "licence_and_rights": {
+    "commercial_use_cleared": true,
+    "all_clips_licensed": true,
+    "contains_real_stock_footage": true,
+    "contains_ai_media": false
+  },
+  "narration_alignment": {
+    "primary_method": "tts_timestamps",
+    "average_confidence": 0.95,
+    "scene_count": 4,
+    "total_duration": 19.08
+  },
+  "outputs": {
+    "video_9_16": {
+      "aspect_ratio": "9:16",
+      "resolution": "1080x1920",
+      "fps": 30.0,
+      "codec": "h264",
+      "audio_codec": "aac",
+      "file_size_bytes": 5640348,
+      "duration_seconds": 19.08,
+      "url": "http://localhost:8000/api/v1/jobs/download/batch-1792463068182-espresso_brewing_tutoria/video_9_16.mp4"
+    },
+    "video_16_9": {
+      "aspect_ratio": "16:9",
+      "resolution": "1920x1080",
+      "fps": 30.0,
+      "codec": "h264",
+      "audio_codec": "aac",
+      "file_size_bytes": 5649097,
+      "duration_seconds": 19.08,
+      "url": "http://localhost:8000/api/v1/jobs/download/batch-1792463068182-espresso_brewing_tutoria/video_16_9.mp4"
+    }
+  },
+  "validation_results": {
+    "integrity_check": "passed",
+    "aspect_ratios_rendered": [
+      "9:16",
+      "16:9"
+    ],
+    "no_black_frames": true,
+    "no_audio_drift": true
+  }
+}

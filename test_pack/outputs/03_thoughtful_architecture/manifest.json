@@ -1,9 +1,9 @@
 {
-  "job_id": "batch-1792403340509-03_thoughtful_architectu",
-  "created_at": "2026-10-19T09:49:00.509640+00:00",
-  "started_at": "2026-10-19T09:49:00.536092+00:00",
-  "completed_at": "2026-10-19T09:49:38.993257+00:00",
-  "total_processing_time_seconds": 38.457,
+  "job_id": "batch-1792464003304-03_thoughtful_architectu",
+  "created_at": "2026-10-20T02:40:03.304277+00:00",
+  "started_at": "2026-10-20T02:40:03.305735+00:00",
+  "completed_at": "2026-10-20T02:40:29.269848+00:00",
+  "total_processing_time_seconds": 25.964,
   "seed": 42,
   "settings": {
     "script": "Clean code requires continuous care and disciplined execution. Thoughtful architecture prevents costly refactoring later.",
@@ -32,19 +32,19 @@
   "timings": {
     "validation": 0.001,
     "ingestion": 0.001,
-    "speech": 1.193,
+    "speech": 2.114,
     "segmentation": 0.002,
-    "footage_search": 13.888,
-    "timeline": 0.024,
-    "captions": 0.005,
-    "rendering": 23.214,
-    "output_validation": 0.126
+    "footage_search": 8.173,
+    "timeline": 0.002,
+    "captions": 0.003,
+    "rendering": 15.589,
+    "output_validation": 0.076
   },
   "cost_estimate": {
     "footage_usd": 0.0,
     "tts_usd": 0.001,
-    "compute_usd": 0.01923,
-    "total_usd": 0.02023
+    "compute_usd": 0.01298,
+    "total_usd": 0.01398
   },
   "warnings": [],
   "licence_and_rights": {
@@ -66,9 +66,9 @@
       "fps": 30.0,
       "codec": "h264",
       "audio_codec": "aac",
-      "file_size_bytes": 2537441,
+      "file_size_bytes": 3289208,
       "duration_seconds": 8.83,
-      "url": "http://localhost:8000/api/v1/jobs/download/batch-1792403340509-03_thoughtful_architectu/video_16_9.mp4"
+      "url": "http://localhost:8000/api/v1/jobs/download/batch-1792464003304-03_thoughtful_architectu/video_16_9.mp4"
     },
     "video_9_16": {
       "aspect_ratio": "9:16",
@@ -76,9 +76,9 @@
       "fps": 30.0,
       "codec": "h264",
       "audio_codec": "aac",
-      "file_size_bytes": 2371065,
+      "file_size_bytes": 3217981,
       "duration_seconds": 8.83,
-      "url": "http://localhost:8000/api/v1/jobs/download/batch-1792403340509-03_thoughtful_architectu/video_9_16.mp4"
+      "url": "http://localhost:8000/api/v1/jobs/download/batch-1792464003304-03_thoughtful_architectu/video_9_16.mp4"
     }
   },
   "validation_results": {

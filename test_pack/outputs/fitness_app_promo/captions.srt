@@ -1,0 +1,11 @@
+1
+00:00:00,000 --> 00:00:05,169
+Athletes push their limits every morning in high intensity training
+
+2
+00:00:05,169 --> 00:00:11,380
+Smart sensors track heart rate, stamina, and muscular recovery in real time
+
+3
+00:00:11,380 --> 00:00:16,559
+Reach peak performance with personalized algorithmic coaching in your pocket

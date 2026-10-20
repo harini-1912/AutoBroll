@@ -53,6 +53,13 @@ app.add_middleware(
 # Correlation ID Middleware
 app.add_middleware(CorrelationIdMiddleware)
 
+# Storyboard endpoint path compatibility middleware (/api/storyboard -> /api/v1/storyboard)
+@app.middleware("http")
+async def storyboard_compat_middleware(request: Request, call_next):
+    if request.url.path == "/api/storyboard/from-brain-dump":
+        request.scope["path"] = "/api/v1/storyboard/from-brain-dump"
+    return await call_next(request)
+
 # --- Standardized Exception Handlers (Integration Standard #5) ---
 
 @app.exception_handler(AppException)

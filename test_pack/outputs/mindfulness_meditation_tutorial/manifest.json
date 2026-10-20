@@ -1,0 +1,94 @@
+{
+  "job_id": "batch-1792463390571-mindfulness_meditation_t",
+  "created_at": "2026-10-20T02:29:50.571398+00:00",
+  "started_at": "2026-10-20T02:29:50.574487+00:00",
+  "completed_at": "2026-10-20T02:32:58.299099+00:00",
+  "total_processing_time_seconds": 187.725,
+  "seed": 42,
+  "settings": {
+    "name": "mindfulness_meditation_tutorial",
+    "script": "Close your eyes and inhale slowly as morning sunlight enters the room. Feel tension release from your shoulders with every deep, grounding exhale. Walking peacefully in quiet nature restores mental clarity and emotional balance. Take five mindful minutes every day to reconnect with your inner stillness.",
+    "voice": "en-gb-female",
+    "aspect_ratios": [
+      "9:16",
+      "16:9"
+    ],
+    "captions": {
+      "burn_in": true,
+      "srt": true
+    }
+  },
+  "models_and_providers": [
+    {
+      "name": "gtts",
+      "version": "1.0",
+      "purpose": "TTS Synthesis"
+    },
+    {
+      "name": "pixabay",
+      "version": "1.0",
+      "purpose": "Primary Footage Search"
+    }
+  ],
+  "timings": {
+    "validation": 0.001,
+    "ingestion": 0.001,
+    "speech": 2.723,
+    "segmentation": 0.002,
+    "footage_search": 125.559,
+    "timeline": 0.002,
+    "captions": 0.004,
+    "rendering": 59.356,
+    "output_validation": 0.073
+  },
+  "cost_estimate": {
+    "footage_usd": 0.0,
+    "tts_usd": 0.001,
+    "compute_usd": 0.09386,
+    "total_usd": 0.09486
+  },
+  "warnings": [],
+  "licence_and_rights": {
+    "commercial_use_cleared": true,
+    "all_clips_licensed": true,
+    "contains_real_stock_footage": true,
+    "contains_ai_media": false
+  },
+  "narration_alignment": {
+    "primary_method": "tts_timestamps",
+    "average_confidence": 0.95,
+    "scene_count": 4,
+    "total_duration": 21.34
+  },
+  "outputs": {
+    "video_9_16": {
+      "aspect_ratio": "9:16",
+      "resolution": "1080x1920",
+      "fps": 30.0,
+      "codec": "h264",
+      "audio_codec": "aac",
+      "file_size_bytes": 18234791,
+      "duration_seconds": 21.34,
+      "url": "http://localhost:8000/api/v1/jobs/download/batch-1792463390571-mindfulness_meditation_t/video_9_16.mp4"
+    },
+    "video_16_9": {
+      "aspect_ratio": "16:9",
+      "resolution": "1920x1080",
+      "fps": 30.0,
+      "codec": "h264",
+      "audio_codec": "aac",
+      "file_size_bytes": 17962062,
+      "duration_seconds": 21.34,
+      "url": "http://localhost:8000/api/v1/jobs/download/batch-1792463390571-mindfulness_meditation_t/video_16_9.mp4"
+    }
+  },
+  "validation_results": {
+    "integrity_check": "passed",
+    "aspect_ratios_rendered": [
+      "9:16",
+      "16:9"
+    ],
+    "no_black_frames": true,
+    "no_audio_drift": true
+  }
+}

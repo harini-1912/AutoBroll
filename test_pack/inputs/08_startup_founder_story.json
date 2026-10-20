@@ -1,0 +1,10 @@
+{
+  "name": "startup_founder_story",
+  "script": "It started in a quiet bedroom with late night coding and relentless curiosity. Countless whiteboard brainstorms and prototypes failed before finding product market fit. Years of persistence transformed an obscure concept into a thriving global team. Never underestimate how far a determined team can go when building with purpose.",
+  "voice": "en-in-female",
+  "aspect_ratios": ["16:9", "9:16"],
+  "captions": {
+    "burn_in": true,
+    "srt": true
+  }
+}

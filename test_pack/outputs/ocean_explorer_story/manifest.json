@@ -1,0 +1,82 @@
+{
+  "job_id": "batch-1792463208065-ocean_explorer_story",
+  "created_at": "2026-10-20T02:26:48.065384+00:00",
+  "started_at": "2026-10-20T02:26:48.068014+00:00",
+  "completed_at": "2026-10-20T02:27:51.804450+00:00",
+  "total_processing_time_seconds": 63.736,
+  "seed": 42,
+  "settings": {
+    "name": "ocean_explorer_story",
+    "script": "Deep below the surface, sunlight fades into mysterious ocean depths. Curious sea turtles and vibrant coral reefs flourish in tranquil waters. Scientific submersibles navigate uncharted canyons on the seabed. Protecting these marine ecosystems ensures the future health of our blue planet.",
+    "voice": "en-gb-male",
+    "aspect_ratios": [
+      "16:9"
+    ],
+    "captions": {
+      "burn_in": true,
+      "srt": true
+    }
+  },
+  "models_and_providers": [
+    {
+      "name": "gtts",
+      "version": "1.0",
+      "purpose": "TTS Synthesis"
+    },
+    {
+      "name": "pixabay",
+      "version": "1.0",
+      "purpose": "Primary Footage Search"
+    }
+  ],
+  "timings": {
+    "validation": 0.001,
+    "ingestion": 0.001,
+    "speech": 4.137,
+    "segmentation": 0.002,
+    "footage_search": 38.332,
+    "timeline": 0.005,
+    "captions": 0.002,
+    "rendering": 21.205,
+    "output_validation": 0.048
+  },
+  "cost_estimate": {
+    "footage_usd": 0.0,
+    "tts_usd": 0.001,
+    "compute_usd": 0.03187,
+    "total_usd": 0.03287
+  },
+  "warnings": [],
+  "licence_and_rights": {
+    "commercial_use_cleared": true,
+    "all_clips_licensed": true,
+    "contains_real_stock_footage": true,
+    "contains_ai_media": false
+  },
+  "narration_alignment": {
+    "primary_method": "tts_timestamps",
+    "average_confidence": 0.95,
+    "scene_count": 4,
+    "total_duration": 22.39
+  },
+  "outputs": {
+    "video_16_9": {
+      "aspect_ratio": "16:9",
+      "resolution": "1920x1080",
+      "fps": 30.0,
+      "codec": "h264",
+      "audio_codec": "aac",
+      "file_size_bytes": 14854641,
+      "duration_seconds": 22.39,
+      "url": "http://localhost:8000/api/v1/jobs/download/batch-1792463208065-ocean_explorer_story/video_16_9.mp4"
+    }
+  },
+  "validation_results": {
+    "integrity_check": "passed",
+    "aspect_ratios_rendered": [
+      "16:9"
+    ],
+    "no_black_frames": true,
+    "no_audio_drift": true
+  }
+}

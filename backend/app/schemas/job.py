@@ -15,6 +15,13 @@ class JobStatus(str, Enum):
 class SceneInput(BaseModel):
     text: str = Field(..., min_length=1, description="Narration line for this scene")
     visual_hint: Optional[str] = Field(None, description="Visual hint or imagery description")
+    visual_query: Optional[str] = Field(None, description="Visual query tag (alias for visual_hint)")
+
+    @model_validator(mode="after")
+    def sync_visual_fields(self) -> "SceneInput":
+        if not self.visual_hint and self.visual_query:
+            self.visual_hint = self.visual_query
+        return self
 
 class CaptionsConfig(BaseModel):
     burn_in: bool = Field(True, description="Whether to burn captions into the video")

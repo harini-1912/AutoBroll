@@ -1,0 +1,10 @@
+{
+  "name": "ai_robotics_news_summary",
+  "script": "Autonomous logistics robots are revolutionizing global fulfillment warehouses. Advanced computer vision guides robotic arms handling complex packages seamlessly. Supply chains worldwide are accelerating delivery times through intelligent automation.",
+  "voice": "en-us-male",
+  "aspect_ratios": ["16:9", "1:1"],
+  "captions": {
+    "burn_in": true,
+    "srt": true
+  }
+}

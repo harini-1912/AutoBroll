@@ -1,9 +1,9 @@
 {
-  "job_id": "batch-1792402084382-developer_platform",
-  "created_at": "2026-10-19T09:28:04.382159+00:00",
-  "started_at": "2026-10-19T09:28:04.385046+00:00",
-  "completed_at": "2026-10-19T09:28:25.035001+00:00",
-  "total_processing_time_seconds": 20.65,
+  "job_id": "batch-1792462981741-developer_platform",
+  "created_at": "2026-10-20T02:23:01.741866+00:00",
+  "started_at": "2026-10-20T02:23:01.743610+00:00",
+  "completed_at": "2026-10-20T02:23:17.559604+00:00",
+  "total_processing_time_seconds": 15.816,
   "seed": 42,
   "settings": {
     "name": "developer_platform",
@@ -24,36 +24,34 @@
       "purpose": "TTS Synthesis"
     },
     {
-      "name": "mock",
+      "name": "pixabay",
       "version": "1.0",
       "purpose": "Primary Footage Search"
     }
   ],
   "timings": {
     "validation": 0.001,
-    "ingestion": 0.002,
-    "speech": 0.966,
-    "segmentation": 0.024,
-    "footage_search": 13.756,
-    "timeline": 0.023,
+    "ingestion": 0.001,
+    "speech": 1.559,
+    "segmentation": 0.003,
+    "footage_search": 9.05,
+    "timeline": 0.003,
     "captions": 0.002,
-    "rendering": 5.833,
-    "output_validation": 0.041
+    "rendering": 5.16,
+    "output_validation": 0.035
   },
   "cost_estimate": {
     "footage_usd": 0.0,
     "tts_usd": 0.001,
-    "compute_usd": 0.01032,
-    "total_usd": 0.01132
+    "compute_usd": 0.00791,
+    "total_usd": 0.00891
   },
-  "warnings": [
-    "Scene scene_002 used secondary footage provider fallback."
-  ],
+  "warnings": [],
   "licence_and_rights": {
     "commercial_use_cleared": true,
     "all_clips_licensed": true,
     "contains_real_stock_footage": true,
-    "contains_ai_media": true
+    "contains_ai_media": false
   },
   "narration_alignment": {
     "primary_method": "tts_timestamps",
@@ -68,9 +66,9 @@
       "fps": 30.0,
       "codec": "h264",
       "audio_codec": "aac",
-      "file_size_bytes": 455256,
+      "file_size_bytes": 2335210,
       "duration_seconds": 8.81,
-      "url": "http://localhost:8000/api/v1/jobs/download/batch-1792402084382-developer_platform/video_16_9.mp4"
+      "url": "http://localhost:8000/api/v1/jobs/download/batch-1792462981741-developer_platform/video_16_9.mp4"
     }
   },
   "validation_results": {

@@ -1,0 +1,10 @@
+{
+  "name": "renewable_energy_news",
+  "script": "Clean energy reached historic milestones this quarter across modern power grids. Massive solar farms expanded across sunlit valleys to replace coal infrastructure. Sustainable wind turbines spinning on coastal horizons are powering entire cities.",
+  "voice": "en-gb-female",
+  "aspect_ratios": ["16:9", "9:16"],
+  "captions": {
+    "burn_in": true,
+    "srt": true
+  }
+}

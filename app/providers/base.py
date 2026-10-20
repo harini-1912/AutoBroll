@@ -53,7 +53,13 @@ class FootageCandidate:
 
 class BaseFootageProvider(ABC):
     @abstractmethod
-    def search(self, query: str, min_duration: float = 3.0, avoid_terms: Optional[List[str]] = None) -> List[FootageCandidate]:
+    def search(
+        self,
+        query: str,
+        min_duration: float = 3.0,
+        avoid_terms: Optional[List[str]] = None,
+        **kwargs,
+    ) -> List[FootageCandidate]:
         """Search footage provider for matching commercial-clean clips."""
         pass
 
@@ -61,3 +67,7 @@ class BaseFootageProvider(ABC):
     def download_clip(self, candidate: FootageCandidate, target_path: str) -> str:
         """Download footage clip to local disk."""
         pass
+
+    def get_by_id(self, media_id: str) -> Optional[FootageCandidate]:
+        """Fetch footage candidate directly by provider media ID if supported."""
+        return None

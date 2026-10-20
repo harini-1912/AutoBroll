@@ -1,0 +1,10 @@
+{
+  "name": "solardew_sunscreen_promo",
+  "voice": "en-us-female",
+  "aspect_ratios": ["16:9", "9:16"],
+  "captions": {
+    "burn_in": true,
+    "srt": true
+  },
+  "script": "Stop putting heavy, greasy sunscreen on your face that clogs your pores and leaves a chalky white cast. You need real broad-spectrum UV protection, but sweating through sticky layers all day ruins your skin and your mood. Meet SolarDew Water-Gel SPF 50. An ultra-lightweight, invisible sunscreen designed for zero shine and instant absorption. Powered by hyaluronic acid and niacinamide, it sinks in within three seconds with absolutely zero white cast and a natural matte finish. Protect your skin barrier without the heavy grease. Tap the link below and get your bottle of SolarDew today!"
+}

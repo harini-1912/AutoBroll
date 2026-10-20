@@ -1,0 +1,94 @@
+{
+  "job_id": "batch-1792462997629-renewable_energy_news",
+  "created_at": "2026-10-20T02:23:17.629050+00:00",
+  "started_at": "2026-10-20T02:23:17.633934+00:00",
+  "completed_at": "2026-10-20T02:24:28.113714+00:00",
+  "total_processing_time_seconds": 70.48,
+  "seed": 42,
+  "settings": {
+    "name": "renewable_energy_news",
+    "script": "Clean energy reached historic milestones this quarter across modern power grids. Massive solar farms expanded across sunlit valleys to replace coal infrastructure. Sustainable wind turbines spinning on coastal horizons are powering entire cities.",
+    "voice": "en-gb-female",
+    "aspect_ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "captions": {
+      "burn_in": true,
+      "srt": true
+    }
+  },
+  "models_and_providers": [
+    {
+      "name": "gtts",
+      "version": "1.0",
+      "purpose": "TTS Synthesis"
+    },
+    {
+      "name": "pixabay",
+      "version": "1.0",
+      "purpose": "Primary Footage Search"
+    }
+  ],
+  "timings": {
+    "validation": 0.001,
+    "ingestion": 0.001,
+    "speech": 3.24,
+    "segmentation": 0.002,
+    "footage_search": 26.124,
+    "timeline": 0.002,
+    "captions": 0.002,
+    "rendering": 40.994,
+    "output_validation": 0.11
+  },
+  "cost_estimate": {
+    "footage_usd": 0.0,
+    "tts_usd": 0.001,
+    "compute_usd": 0.03524,
+    "total_usd": 0.03624
+  },
+  "warnings": [],
+  "licence_and_rights": {
+    "commercial_use_cleared": true,
+    "all_clips_licensed": true,
+    "contains_real_stock_footage": true,
+    "contains_ai_media": false
+  },
+  "narration_alignment": {
+    "primary_method": "tts_timestamps",
+    "average_confidence": 0.95,
+    "scene_count": 3,
+    "total_duration": 18.17
+  },
+  "outputs": {
+    "video_16_9": {
+      "aspect_ratio": "16:9",
+      "resolution": "1920x1080",
+      "fps": 30.0,
+      "codec": "h264",
+      "audio_codec": "aac",
+      "file_size_bytes": 13901754,
+      "duration_seconds": 18.17,
+      "url": "http://localhost:8000/api/v1/jobs/download/batch-1792462997629-renewable_energy_news/video_16_9.mp4"
+    },
+    "video_9_16": {
+      "aspect_ratio": "9:16",
+      "resolution": "1080x1920",
+      "fps": 30.0,
+      "codec": "h264",
+      "audio_codec": "aac",
+      "file_size_bytes": 11788247,
+      "duration_seconds": 18.17,
+      "url": "http://localhost:8000/api/v1/jobs/download/batch-1792462997629-renewable_energy_news/video_9_16.mp4"
+    }
+  },
+  "validation_results": {
+    "integrity_check": "passed",
+    "aspect_ratios_rendered": [
+      "16:9",
+      "9:16"
+    ],
+    "no_black_frames": true,
+    "no_audio_drift": true
+  }
+}

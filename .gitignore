@@ -1,10 +1,9 @@
-# Python
+# Byte-compiled / optimized / Python
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
 .Python
-env/
 build/
 develop-eggs/
 dist/
@@ -21,10 +20,11 @@ wheels/
 .installed.cfg
 *.egg
 
-# Virtual Environment
+# Virtual Environments
 .venv/
 venv/
 ENV/
+env/
 
 # Testing & Coverage
 .pytest_cache/
@@ -33,19 +33,38 @@ htmlcov/
 
 # Local Environment & Secrets
 .env
+.env.*
+!.env.example
 *.local
 *.pem
 *.key
 
-# Application Temporary Data & Large Media
-data/
-storage/
+# Application Artifacts, Temporary Data & Caches
+artifacts/
 temp/
 tmp/
+data/
+storage/
+*.db
+*.sqlite
+*.sqlite3
+*.log
+
+# Media & Rendered Assets
 *.mp4
 *.wav
 *.mp3
 *.m4a
+*.mov
+*.webm
+*.part
+*.tmp*
+*.jpg
+*.jpeg
+*.png
+*.webp
+!static/
+!frontend/
 !test_pack/fixtures/*.mp3
 !test_pack/fixtures/*.wav
 

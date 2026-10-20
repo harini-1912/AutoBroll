@@ -1,0 +1,10 @@
+{
+  "name": "ocean_explorer_story",
+  "script": "Deep below the surface, sunlight fades into mysterious ocean depths. Curious sea turtles and vibrant coral reefs flourish in tranquil waters. Scientific submersibles navigate uncharted canyons on the seabed. Protecting these marine ecosystems ensures the future health of our blue planet.",
+  "voice": "en-gb-male",
+  "aspect_ratios": ["16:9"],
+  "captions": {
+    "burn_in": true,
+    "srt": true
+  }
+}

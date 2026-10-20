@@ -298,6 +298,7 @@ class FFmpegEngine:
         reuse_existing_clips: bool = False,
         captions_srt_path: Optional[Path] = None,
         burn_in: bool = False,
+        job_start_time: Optional[float] = None,
     ) -> Path:
         """Assemble scene clips into a normalized video and mux the narration audio track."""
         if not self.is_available():
@@ -336,10 +337,26 @@ class FFmpegEngine:
             # Record relative path for safe concat on all platforms
             clip_filenames.append(f"scenes_{ratio_slug}/clip_{idx:03d}.mp4")
 
-        # 2. Write concat demuxer file inside staging directory
+        # 2. Verify that every input .mp4 file exists, is valid, and was created during the current job run
+        for fname in clip_filenames:
+            clip_file = staging_dir / fname
+            if not clip_file.exists() or clip_file.stat().st_size == 0:
+                raise RenderFailedError(
+                    f"Input scene clip '{fname}' is missing or empty before compiling concat list."
+                )
+            if job_start_time is not None:
+                # Verify clip was created during current job execution window (allowing 5s clock skew)
+                if clip_file.stat().st_mtime < (job_start_time - 5.0):
+                    raise RenderFailedError(
+                        f"Input scene clip '{fname}' was not created during the current job run (mtime={clip_file.stat().st_mtime}, job_start={job_start_time})."
+                    )
+
+        # 3. Write concat demuxer files inside staging directory (both ratio-specific and concat_list.txt)
         concat_file = staging_dir / f"concat_{ratio_slug}.txt"
+        concat_list_file = staging_dir / "concat_list.txt"
         concat_content = "\n".join([f"file '{fname}'" for fname in clip_filenames]) + "\n"
         concat_file.write_text(concat_content, encoding="utf-8")
+        concat_list_file.write_text(concat_content, encoding="utf-8")
 
         # 3. Assemble and mux with narration audio (and burned-in captions if requested)
         cmd = [
@@ -383,18 +400,21 @@ class FFmpegEngine:
         if should_burn:
             if aspect_ratio == "9:16":
                 force_style = (
-                    "FontSize=20,PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,"
-                    "BorderStyle=3,Outline=2,Shadow=1,Alignment=2,MarginV=200"
+                    "FontName=Arial,FontSize=15,Bold=1,"
+                    "PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,BackColour=&H80000000,"
+                    "BorderStyle=1,Outline=2,Shadow=1,Alignment=2,MarginV=40,MarginL=25,MarginR=25"
                 )
             elif aspect_ratio == "1:1":
                 force_style = (
-                    "FontSize=22,PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,"
-                    "BorderStyle=3,Outline=2,Shadow=1,Alignment=2,MarginV=50"
+                    "FontName=Arial,FontSize=15,Bold=1,"
+                    "PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,BackColour=&H80000000,"
+                    "BorderStyle=1,Outline=2,Shadow=1,Alignment=2,MarginV=30,MarginL=25,MarginR=25"
                 )
             else:
                 force_style = (
-                    "FontSize=24,PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,"
-                    "BorderStyle=3,Outline=2,Shadow=1,Alignment=2,MarginV=35"
+                    "FontName=Arial,FontSize=16,Bold=1,"
+                    "PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,BackColour=&H80000000,"
+                    "BorderStyle=1,Outline=2,Shadow=1,Alignment=2,MarginV=25,MarginL=30,MarginR=30"
                 )
             subtitle_filter = f"subtitles={srt_filename}:force_style='{force_style}'"
             logger.info("Assembling video with burned-in subtitles for %s (filter: %s)", aspect_ratio, subtitle_filter)
@@ -425,8 +445,9 @@ class FFmpegEngine:
             str(output_path),
         ])
 
-        logger.info("Executing video assembly for aspect ratio %s -> %s (burn_in=%s)", aspect_ratio, output_path.name, should_burn)
-        proc = subprocess.run(cmd, cwd=str(staging_dir), capture_output=True, text=True, timeout=90)
+        assembly_timeout = max(180, int(sum(sc.get("duration", 2.0) for sc in scenes_data) * 3))
+        logger.info("Executing video assembly for aspect ratio %s -> %s (burn_in=%s, timeout=%ds)", aspect_ratio, output_path.name, should_burn, assembly_timeout)
+        proc = subprocess.run(cmd, cwd=str(staging_dir), capture_output=True, text=True, timeout=assembly_timeout)
         if proc.returncode != 0:
             err_tail = proc.stderr[-400:].strip() if len(proc.stderr) > 400 else proc.stderr.strip()
             # If burned-in encoding failed unexpectedly, attempt fallback to stream copy

@@ -1,0 +1,10 @@
+{
+  "name": "mindfulness_meditation_tutorial",
+  "script": "Close your eyes and inhale slowly as morning sunlight enters the room. Feel tension release from your shoulders with every deep, grounding exhale. Walking peacefully in quiet nature restores mental clarity and emotional balance. Take five mindful minutes every day to reconnect with your inner stillness.",
+  "voice": "en-gb-female",
+  "aspect_ratios": ["9:16", "16:9"],
+  "captions": {
+    "burn_in": true,
+    "srt": true
+  }
+}

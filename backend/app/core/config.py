@@ -61,6 +61,7 @@ class Settings(BaseModel):
     # Storage
     STORAGE_BACKEND: str = Field(default_factory=lambda: os.getenv("STORAGE_BACKEND", "local"))
     LOCAL_STORAGE_DIR: str = Field(default_factory=lambda: os.getenv("LOCAL_STORAGE_DIR", "./storage"))
+    ARTIFACTS_DIR: str = Field(default_factory=lambda: os.getenv("ARTIFACTS_DIR", os.getenv("LOCAL_STORAGE_DIR", "./storage")))
     BASE_URL: str = Field(default_factory=lambda: os.getenv("BASE_URL", "http://localhost:8000"))
 
     # S3 / MinIO
@@ -79,10 +80,11 @@ class Settings(BaseModel):
     FFPROBE_PATH: str = Field(default_factory=_resolve_ffprobe_path)
 
     # Providers
-    FOOTAGE_PRIMARY_PROVIDER: str = Field(default_factory=lambda: os.getenv("FOOTAGE_PRIMARY_PROVIDER", "mock"))
-    PEXELS_API_KEY: str = Field(default_factory=lambda: os.getenv("PEXELS_API_KEY", ""))
-    PIXABAY_API_KEY: str = Field(default_factory=lambda: os.getenv("PIXABAY_API_KEY", ""))
-    REPLICATE_API_TOKEN: str = Field(default_factory=lambda: os.getenv("REPLICATE_API_TOKEN", ""))
+    FOOTAGE_PRIMARY_PROVIDER: str = Field(default_factory=lambda: os.getenv("FOOTAGE_PRIMARY_PROVIDER", "pixabay"))
+    PIXABAY_API_KEY: Optional[str] = Field(default_factory=lambda: os.getenv("PIXABAY_API_KEY") or None)
+    PEXELS_API_KEY: Optional[str] = Field(default_factory=lambda: os.getenv("PEXELS_API_KEY") or None)
+    POLLINATIONS_API_KEY: Optional[str] = Field(default_factory=lambda: os.getenv("POLLINATIONS_API_KEY") or None)
+    REPLICATE_API_TOKEN: Optional[str] = Field(default_factory=lambda: os.getenv("REPLICATE_API_TOKEN") or None)
 
     # TTS
     TTS_PROVIDER: str = Field(default_factory=lambda: os.getenv("TTS_PROVIDER", "mock"))

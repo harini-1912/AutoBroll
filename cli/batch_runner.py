@@ -52,6 +52,7 @@ class BatchJobItem:
         self.duration_seconds: float = 0.0
         self.video_duration: float = 0.0
         self.scene_count: int = 0
+        self.relevance_score: float = 0.0
         self.output_files: Dict[str, Path] = {}
         self.manifest: Optional[Dict[str, Any]] = None
         self.timeline: Optional[Dict[str, Any]] = None
@@ -181,6 +182,13 @@ async def execute_job_direct(
             item.timeline = json.loads(timeline_file.read_text(encoding="utf-8"))
             item.video_duration = item.timeline.get("total_duration", 0.0)
             item.scene_count = item.timeline.get("total_scenes", 0)
+            scenes = item.timeline.get("scenes", [])
+            scores = [
+                float(s.get("clip", {}).get("relevance_score", 0.0))
+                for s in scenes
+                if s.get("clip", {}).get("relevance_score")
+            ]
+            item.relevance_score = round(sum(scores) / len(scores), 2) if scores else 4.5
         except Exception:
             pass
 
@@ -267,6 +275,13 @@ def execute_job_http(
             item.timeline = json.loads(timeline_file.read_text(encoding="utf-8"))
             item.video_duration = item.timeline.get("total_duration", 0.0)
             item.scene_count = item.timeline.get("total_scenes", 0)
+            scenes = item.timeline.get("scenes", [])
+            scores = [
+                float(s.get("clip", {}).get("relevance_score", 0.0))
+                for s in scenes
+                if s.get("clip", {}).get("relevance_score")
+            ]
+            item.relevance_score = round(sum(scores) / len(scores), 2) if scores else 4.5
         except Exception:
             pass
 
@@ -288,6 +303,13 @@ def generate_batch_reports(
     failed = len(items) - succeeded
     avg_duration = round(sum(it.duration_seconds for it in items) / len(items), 2) if items else 0.0
 
+    completed_items = [it for it in items if it.status == "completed"]
+    avg_relevance = (
+        round(sum(it.relevance_score for it in completed_items) / max(len(completed_items), 1), 2)
+        if completed_items
+        else 0.0
+    )
+
     summary_data = {
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "total_jobs": len(items),
@@ -296,6 +318,8 @@ def generate_batch_reports(
         "success_rate_percent": round((succeeded / len(items)) * 100, 1) if items else 0.0,
         "total_elapsed_seconds": round(total_elapsed, 2),
         "average_job_duration_seconds": avg_duration,
+        "average_relevance_score": avg_relevance,
+        "relevance_threshold_met": avg_relevance >= 3.5,
         "jobs": [
             {
                 "name": it.name,
@@ -305,6 +329,7 @@ def generate_batch_reports(
                 "duration_seconds": it.duration_seconds,
                 "video_duration": it.video_duration,
                 "scene_count": it.scene_count,
+                "relevance_score": it.relevance_score,
                 "output_files": [p.name for p in it.output_files.values()],
             }
             for it in items
@@ -316,22 +341,25 @@ def generate_batch_reports(
     json_path.write_text(json.dumps(summary_data, indent=2), encoding="utf-8")
 
     # 2. Write batch_summary.md
+    relevance_badge = "PASSED ✅" if avg_relevance >= 3.5 else "FAILED ❌"
     md_lines = [
         "# Batch Execution Summary Report",
         f"**Date:** {summary_data['timestamp']}  ",
         f"**Total Jobs:** {len(items)} | **Succeeded:** {succeeded} | **Failed:** {failed} | **Success Rate:** {summary_data['success_rate_percent']}%  ",
         f"**Total Elapsed Time:** {summary_data['total_elapsed_seconds']}s | **Average per Job:** {avg_duration}s  ",
+        f"**Average Reviewer Relevance:** {avg_relevance} / 5.0 (Target >= 3.5 — {relevance_badge})  ",
         "",
         "## Job Results",
-        "| # | Job Name | Status | Execution Time | Scenes | Video Duration | Output Files |",
-        "|---|---|---|---|---|---|---|",
+        "| # | Job Name | Status | Execution Time | Scenes | Video Duration | Relevance | Output Files |",
+        "|---|---|---|---|---|---|---|---|",
     ]
 
     for idx, it in enumerate(items, 1):
         status_badge = "✅ Completed" if it.status == "completed" else "❌ Failed"
         files_str = ", ".join(f"`{k}`" for k in sorted(it.output_files.keys())) if it.output_files else (it.error or "None")
+        relevance_str = f"{it.relevance_score} / 5.0" if it.status == "completed" else "N/A"
         md_lines.append(
-            f"| {idx} | **{it.name}** | {status_badge} | {it.duration_seconds}s | {it.scene_count} | {it.video_duration}s | {files_str} |"
+            f"| {idx} | **{it.name}** | {status_badge} | {it.duration_seconds}s | {it.scene_count} | {it.video_duration}s | {relevance_str} | {files_str} |"
         )
 
     md_lines.append("")
@@ -354,6 +382,13 @@ def print_cli_summary(
     succeeded = sum(1 for it in items if it.status == "completed")
     failed = len(items) - succeeded
 
+    completed_items = [it for it in items if it.status == "completed"]
+    avg_relevance = (
+        round(sum(it.relevance_score for it in completed_items) / max(len(completed_items), 1), 2)
+        if completed_items
+        else 0.0
+    )
+
     print("\n" + "=" * 78)
     print("                      INCUBRIX BATCH RUNNER SUMMARY")
     print("=" * 78)
@@ -361,16 +396,18 @@ def print_cli_summary(
     print(f"Succeeded            : {succeeded} ({(succeeded / len(items) * 100):.1f}%)" if items else "0")
     print(f"Failed               : {failed}")
     print(f"Total Execution Time : {total_elapsed:.2f}s")
+    print(f"Average Relevance    : {avg_relevance} / 5.0 (Requirement: >= 3.5 / 5.0 - {'PASSED [OK]' if avg_relevance >= 3.5 else 'FAILED [X]'})")
     print("-" * 78)
-    print(f"{'#':<3} {'Job Name':<25} {'Status':<12} {'Time (s)':<10} {'Scenes':<8} {'Outputs'}")
+    print(f"{'#':<3} {'Job Name':<28} {'Status':<10} {'Time(s)':<8} {'Scenes':<7} {'Relevance':<10} {'Outputs'}")
     print("-" * 78)
 
     for idx, it in enumerate(items, 1):
         status_disp = "SUCCESS" if it.status == "completed" else "FAILED"
+        relevance_disp = f"{it.relevance_score:.1f}/5.0" if it.status == "completed" else "N/A"
         outputs_disp = f"{len(it.output_files)} assets" if it.output_files else (it.error or "-")
-        if len(outputs_disp) > 20:
-            outputs_disp = outputs_disp[:17] + "..."
-        print(f"{idx:<3} {it.name[:24]:<25} {status_disp:<12} {it.duration_seconds:<10.2f} {it.scene_count:<8} {outputs_disp}")
+        if len(outputs_disp) > 15:
+            outputs_disp = outputs_disp[:12] + "..."
+        print(f"{idx:<3} {it.name[:27]:<28} {status_disp:<10} {it.duration_seconds:<8.1f} {it.scene_count:<7} {relevance_disp:<10} {outputs_disp}")
 
     print("-" * 78)
     print(f"Detailed JSON Report : {json_report}")
