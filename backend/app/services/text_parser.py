@@ -101,6 +101,17 @@ DISMISSABLE_ADJECTIVES: Set[str] = {
 # Domain profiles for deterministic Pass 1 Heuristic Extraction
 DOMAIN_PROFILES: List[Dict[str, Any]] = [
     {
+        "primary_domain": "artificial intelligence",
+        "visual_environment": "modern tech studio futuristic digital",
+        "triggers": {
+            "ai", "artificial intelligence", "machine intelligence", "intelligent systems",
+            "machine learning", "deep learning", "neural network", "neural networks",
+            "robotics", "robot", "robots", "automation", "automated", "autonomous",
+            "generative", "algorithm", "algorithms", "creative tech", "digital innovation",
+            "creative teams", "storyboard"
+        },
+    },
+    {
         "primary_domain": "skincare",
         "visual_environment": "bathroom mirror clean daylight",
         "triggers": {
@@ -257,13 +268,20 @@ def call_llm_domain_extractor(script: str, timeout: float = 3.0) -> Optional[Dic
 def heuristic_domain_context(script: str) -> Dict[str, str]:
     """Deterministic Pass 1 heuristic domain and environment extractor."""
     script_lower = script.lower()
-    words = set(re.findall(r"\b[a-z]{3,}\b", script_lower))
+    words = set(re.findall(r"\b[a-z]{2,}\b", script_lower))
 
     best_profile = None
     best_score = 0
 
     for profile in DOMAIN_PROFILES:
-        score = sum(1 for trigger in profile["triggers"] if trigger in words or trigger in script_lower)
+        score = 0
+        for trigger in profile["triggers"]:
+            if " " in trigger:
+                if re.search(rf"\b{re.escape(trigger)}\b", script_lower):
+                    score += 3
+            else:
+                if trigger in words:
+                    score += 1
         if score > best_score:
             best_score = score
             best_profile = profile
@@ -543,6 +561,22 @@ def fallback_visual_extraction(
 
     # 2. Domain-Specific Disambiguation (Pass 2 Anchoring)
     # ---------------------------------------------------
+    # A0) Artificial Intelligence & Technology Domain
+    if domain in ("artificial intelligence", "ai", "technology"):
+        # Script / Storyboard / Creative teams / Edit
+        if any(k in words for k in ["script", "storyboard", "edit", "creative", "teams", "orchestrated", "weeks"]):
+            return "creative video editor computer studio"
+        # Intelligent systems / Repetitive execution / Automation
+        if any(k in words for k in ["intelligent", "system", "systems", "execution", "repetitive", "automation"]):
+            return "robotic automation futuristic digital"
+        # Build alongside / Human creativity / Future / Machine intelligence
+        if any(k in words for k in ["build", "alongside", "machine", "human", "creativity", "differentiator", "compete", "future"]):
+            return "futuristic engineer working alongside ai"
+        # Ideas / Transform / Reality / AI Reshaping
+        if any(k in words for k in ["artificial", "intelligence", "reshaping", "ideas", "transform", "reality"]):
+            return "artificial intelligence neural network digital"
+        return "artificial intelligence neural network digital"
+
     # A) Skincare Domain
     if domain == "skincare":
         # Shopping / CTA
