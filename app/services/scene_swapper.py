@@ -198,6 +198,8 @@ class SceneSwapper:
                             cmd_slice = [
                                 ffmpeg_engine.ffmpeg_path,
                                 "-y",
+                                "-threads",
+                                "1",
                                 "-ss",
                                 str(start_time_val),
                                 "-t",
@@ -208,6 +210,10 @@ class SceneSwapper:
                                 "libx264",
                                 "-preset",
                                 "ultrafast",
+                                "-bufsize",
+                                "1000k",
+                                "-maxrate",
+                                "1500k",
                                 "-pix_fmt",
                                 "yuv420p",
                                 "-r",
@@ -248,6 +254,8 @@ class SceneSwapper:
                 cmd_concat = [
                     ffmpeg_engine.ffmpeg_path,
                     "-y",
+                    "-threads",
+                    "1",
                     "-f",
                     "concat",
                     "-safe",

@@ -25,9 +25,9 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 ASPECT_DIMENSIONS = {
-    "16:9": (1920, 1080),
-    "9:16": (1080, 1920),
-    "1:1": (1080, 1080),
+    "16:9": (1280, 720),
+    "9:16": (720, 1280),
+    "1:1": (720, 720),
 }
 
 VIDEO_MODEL_DIMENSIONS = {
@@ -178,7 +178,7 @@ async def generate_visual_fallback(
                 settings.FFMPEG_PATH,
                 "-y",
                 "-threads",
-                str(getattr(settings, "FFMPEG_THREADS", 2)),
+                "1",
                 "-loop",
                 "1",
                 "-i",
@@ -191,6 +191,10 @@ async def generate_visual_fallback(
                 "libx264",
                 "-preset",
                 "ultrafast",
+                "-bufsize",
+                "1000k",
+                "-maxrate",
+                "1500k",
                 "-pix_fmt",
                 "yuv420p",
                 str(output_path),
@@ -222,8 +226,8 @@ async def generate_visual_fallback(
 async def generate_offline_gradient_clip(
     output_path: Path,
     scene_duration: float = 5.0,
-    width: int = 1920,
-    height: int = 1080,
+    width: int = 1280,
+    height: int = 720,
     scene_index: int = 0,
 ) -> Path:
     """Generate an animated dark gradient clip with subtle motion using FFmpeg."""
@@ -244,7 +248,7 @@ async def generate_offline_gradient_clip(
         settings.FFMPEG_PATH,
         "-y",
         "-threads",
-        str(getattr(settings, "FFMPEG_THREADS", 2)),
+        "1",
         "-f",
         "lavfi",
         "-i",
@@ -255,6 +259,10 @@ async def generate_offline_gradient_clip(
         "libx264",
         "-preset",
         "ultrafast",
+        "-bufsize",
+        "1000k",
+        "-maxrate",
+        "1500k",
         "-pix_fmt",
         "yuv420p",
         "-r",
@@ -277,7 +285,7 @@ async def generate_offline_gradient_clip(
         settings.FFMPEG_PATH,
         "-y",
         "-threads",
-        str(getattr(settings, "FFMPEG_THREADS", 2)),
+        "1",
         "-f",
         "lavfi",
         "-i",
@@ -288,6 +296,10 @@ async def generate_offline_gradient_clip(
         "libx264",
         "-preset",
         "ultrafast",
+        "-bufsize",
+        "1000k",
+        "-maxrate",
+        "1500k",
         "-pix_fmt",
         "yuv420p",
         str(output_path),

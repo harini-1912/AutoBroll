@@ -19,9 +19,9 @@ from app.core.exceptions import RenderFailedError
 from app.core.logging import logger
 
 ASPECT_RATIO_DIMENSIONS: Dict[str, Tuple[int, int]] = {
-    "16:9": (1920, 1080),
-    "9:16": (1080, 1920),
-    "1:1": (1080, 1080),
+    "16:9": (1280, 720),
+    "9:16": (720, 1280),
+    "1:1": (720, 720),
 }
 
 # Curated palette of modern, professional theme colors for scene backgrounds
@@ -219,12 +219,10 @@ class FFmpegEngine:
                 "yuv420p",
                 "-r",
                 "30",
-                "-max_muxing_queue_size",
-                "512",
                 "-bufsize",
-                "2M",
+                "1000k",
                 "-maxrate",
-                "4M",
+                "1500k",
                 "-an",
                 str(output_path),
             ]
@@ -234,10 +232,12 @@ class FFmpegEngine:
                 if proc_vid.returncode == 0 and output_path.exists() and output_path.stat().st_size > 0:
                     return output_path
                 else:
+                    err_msg = proc_vid.stderr.strip() if proc_vid.stderr else "non-zero returncode"
                     logger.warning(
-                        "FFmpeg raw video render failed for scene %s (%s); falling back to procedural visual",
+                        "FFmpeg raw video render failed for scene %s (cmd: %s): %s; falling back to procedural visual",
                         scene_id,
-                        proc_vid.stderr[:120] if proc_vid.stderr else "non-zero returncode",
+                        " ".join(cmd_video),
+                        err_msg,
                     )
             except subprocess.TimeoutExpired:
                 logger.warning(
@@ -259,7 +259,7 @@ class FFmpegEngine:
         clean_text = clean_text[:60]
 
         escaped_text = clean_text.replace(":", r"\:").replace("'", r"\\\'")
-        font_size = 48 if aspect_ratio != "9:16" else 36
+        font_size = 36 if aspect_ratio != "9:16" else 26
 
         # Try rendering with drawtext overlay
         vf_filter = (
@@ -270,7 +270,7 @@ class FFmpegEngine:
             self.ffmpeg_path,
             "-y",
             "-threads",
-            str(getattr(settings, "FFMPEG_THREADS", 1)),
+            "1",
             "-f",
             "lavfi",
             "-i",
@@ -281,12 +281,14 @@ class FFmpegEngine:
             "libx264",
             "-preset",
             "ultrafast",
+            "-bufsize",
+            "1000k",
+            "-maxrate",
+            "1500k",
             "-pix_fmt",
             "yuv420p",
             "-r",
             "30",
-            "-max_muxing_queue_size",
-            "512",
             str(output_path),
         ]
 
@@ -305,7 +307,7 @@ class FFmpegEngine:
             self.ffmpeg_path,
             "-y",
             "-threads",
-            str(getattr(settings, "FFMPEG_THREADS", 1)),
+            "1",
             "-f",
             "lavfi",
             "-i",
@@ -314,21 +316,28 @@ class FFmpegEngine:
             "libx264",
             "-preset",
             "ultrafast",
+            "-bufsize",
+            "1000k",
+            "-maxrate",
+            "1500k",
             "-pix_fmt",
             "yuv420p",
             "-r",
             "30",
-            "-max_muxing_queue_size",
-            "512",
             str(output_path),
         ]
         try:
             fallback_proc = subprocess.run(cmd_fallback, capture_output=True, text=True, timeout=clip_timeout)
             if fallback_proc.returncode != 0:
+                err_detail = fallback_proc.stderr.strip() if fallback_proc.stderr else "non-zero return code"
+                cmd_str = " ".join(cmd_fallback)
+                logger.error("FFmpeg fallback failed for scene %s:\nCommand: %s\nStderr: %s", scene_id, cmd_str, err_detail)
                 raise RenderFailedError(
-                    f"FFmpeg failed to render scene {scene_id}: {fallback_proc.stderr[:200]}"
+                    f"FFmpeg failed to render scene {scene_id} [Command: {cmd_str}]: {err_detail}"
                 )
         except Exception as exc:
+            if isinstance(exc, RenderFailedError):
+                raise
             raise RenderFailedError(f"FFmpeg fallback failed for scene {scene_id}: {str(exc)}")
 
         if not output_path.exists() or output_path.stat().st_size == 0:
@@ -480,9 +489,9 @@ class FFmpegEngine:
                 "-tune",
                 "fastdecode",
                 "-bufsize",
-                "2M",
+                "1000k",
                 "-maxrate",
-                "4M",
+                "1500k",
                 "-pix_fmt",
                 "yuv420p",
                 "-r",
@@ -512,8 +521,10 @@ class FFmpegEngine:
         try:
             proc = subprocess.run(cmd, cwd=str(staging_dir), capture_output=True, text=True, timeout=assembly_timeout)
             if proc.returncode != 0:
-                err_tail = proc.stderr[-400:].strip() if len(proc.stderr) > 400 else proc.stderr.strip()
-                raise RuntimeError(err_tail)
+                err_tail = proc.stderr.strip() if proc.stderr else "non-zero exit code"
+                cmd_str = " ".join(cmd)
+                logger.error("FFmpeg primary assembly failed for %s:\nCommand: %s\nStderr: %s", aspect_ratio, cmd_str, err_tail)
+                raise RuntimeError(f"FFmpeg assembly failed [Command: {cmd_str}]: {err_tail}")
         except (subprocess.TimeoutExpired, Exception) as enc_err:
             # If burned-in encoding failed or timed out unexpectedly, attempt fallback to stream copy
             if should_burn:
@@ -522,7 +533,7 @@ class FFmpegEngine:
                     self.ffmpeg_path,
                     "-y",
                     "-threads",
-                    str(getattr(settings, "FFMPEG_THREADS", 1)),
+                    "1",
                     "-f",
                     "concat",
                     "-safe",
@@ -550,13 +561,16 @@ class FFmpegEngine:
                 ])
                 fb_proc = subprocess.run(fallback_cmd, cwd=str(staging_dir), capture_output=True, text=True, timeout=120)
                 if fb_proc.returncode != 0:
-                    fb_tail = fb_proc.stderr[-400:].strip() if len(fb_proc.stderr) > 400 else fb_proc.stderr.strip()
+                    fb_tail = fb_proc.stderr.strip() if fb_proc.stderr else "non-zero returncode"
+                    fb_cmd_str = " ".join(fallback_cmd)
+                    logger.error("FFmpeg fallback assembly failed for %s:\nCommand: %s\nStderr: %s", aspect_ratio, fb_cmd_str, fb_tail)
                     raise RenderFailedError(
-                        f"FFmpeg assembly failed for aspect ratio {aspect_ratio}: {fb_tail}"
+                        f"FFmpeg assembly failed for aspect ratio {aspect_ratio} [Command: {fb_cmd_str}]: {fb_tail}"
                     )
             else:
+                cmd_str = " ".join(cmd)
                 raise RenderFailedError(
-                    f"FFmpeg assembly failed for aspect ratio {aspect_ratio}: {str(enc_err)}"
+                    f"FFmpeg assembly failed for aspect ratio {aspect_ratio} [Command: {cmd_str}]: {str(enc_err)}"
                 )
 
         # 4. Rigorous validation of the resulting output file

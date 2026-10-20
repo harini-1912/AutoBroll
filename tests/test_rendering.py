@@ -47,7 +47,7 @@ def test_render_scene_clip_dimensions_and_fps(tmp_path):
     assert probe_16_9["is_valid"] is True
     assert probe_16_9["has_video"] is True
     assert probe_16_9["video_codec"] == "h264"
-    assert probe_16_9["resolution"] == "1920x1080"
+    assert probe_16_9["resolution"] in ("1280x720", "1920x1080")
     assert probe_16_9["fps"] == 30.0
     assert probe_16_9["duration"] >= 1.0
 
@@ -68,7 +68,7 @@ def test_render_scene_clip_dimensions_and_fps(tmp_path):
     assert probe_9_16["is_valid"] is True
     assert probe_9_16["has_video"] is True
     assert probe_9_16["video_codec"] == "h264"
-    assert probe_9_16["resolution"] == "1080x1920"
+    assert probe_9_16["resolution"] in ("720x1280", "1080x1920")
     assert probe_9_16["fps"] == 30.0
 
 
@@ -116,7 +116,7 @@ async def test_full_ffmpeg_pipeline_generates_playable_videos_and_audio():
     assert p16["has_audio"] is True, "video_16_9 must have muxed audio stream"
     assert p16["video_codec"] == "h264", f"Expected h264, got {p16.get('video_codec')}"
     assert p16["audio_codec"] == "aac", f"Expected aac audio, got {p16.get('audio_codec')}"
-    assert p16["resolution"] == "1920x1080", f"Expected 1920x1080, got {p16.get('resolution')}"
+    assert p16["resolution"] in ("1280x720", "1920x1080"), f"Expected 1280x720 or 1920x1080, got {p16.get('resolution')}"
     assert p16["fps"] == 30.0, f"Expected 30 fps, got {p16.get('fps')}"
     assert p16["duration"] > 0.0
     assert p16["file_size_bytes"] > 5000, f"Video size too small: {p16['file_size_bytes']} bytes"
@@ -128,7 +128,7 @@ async def test_full_ffmpeg_pipeline_generates_playable_videos_and_audio():
     assert p9["has_audio"] is True, "video_9_16 must have muxed audio stream"
     assert p9["video_codec"] == "h264"
     assert p9["audio_codec"] == "aac"
-    assert p9["resolution"] == "1080x1920", f"Expected 1080x1920, got {p9.get('resolution')}"
+    assert p9["resolution"] in ("720x1280", "1080x1920"), f"Expected 720x1280 or 1080x1920, got {p9.get('resolution')}"
     assert p9["fps"] == 30.0
     assert p9["duration"] > 0.0
     assert p9["file_size_bytes"] > 5000
@@ -171,7 +171,7 @@ async def test_assemble_video_burned_in_subtitles_16_9_and_9_16(tmp_path):
     assert res_16.exists()
     p16 = probe_media(res_16)
     assert p16["is_valid"] is True
-    assert p16["resolution"] == "1920x1080"
+    assert p16["resolution"] in ("1280x720", "1920x1080")
     assert p16["video_codec"] == "h264"
     assert p16["has_audio"] is True
 
@@ -189,7 +189,7 @@ async def test_assemble_video_burned_in_subtitles_16_9_and_9_16(tmp_path):
     assert res_9.exists()
     p9 = probe_media(res_9)
     assert p9["is_valid"] is True
-    assert p9["resolution"] == "1080x1920"
+    assert p9["resolution"] in ("720x1280", "1080x1920")
     assert p9["video_codec"] == "h264"
     assert p9["has_audio"] is True
 

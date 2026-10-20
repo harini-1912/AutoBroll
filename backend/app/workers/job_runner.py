@@ -31,7 +31,7 @@ from app.providers import get_tts_provider
 from app.providers.mock import MockFootageProvider, MockTTSProvider
 from app.providers.pexels import PexelsFootageProvider
 from app.providers.pixabay import PixabayFootageProvider
-from app.rendering.ffmpeg_engine import ffmpeg_engine, probe_media
+from app.rendering.ffmpeg_engine import ffmpeg_engine, probe_media, ASPECT_RATIO_DIMENSIONS
 from app.services.alignment import narration_aligner
 from app.services.text_parser import parse_visual_query, extract_script_domain_context
 from app.services.ai_fallback_generator import generate_visual_fallback
@@ -568,7 +568,7 @@ class JobRunner:
                         clip_filename = f"{chosen_clip.clip_id}.mp4"
                         target_file = downloads_dir / clip_filename
                         try:
-                            chosen_provider.download_clip(chosen_clip, str(target_file))
+                            chosen_provider.download_clip(chosen_clip, str(target_file), timeout=8.0)
                             if target_file.exists() and target_file.stat().st_size > 1000:
                                 if footage_provider_service.verify_input_clip_freshness(target_file, start_time, job_dir=job_dir):
                                     raw_clip_path = str(target_file)
@@ -579,28 +579,119 @@ class JobRunner:
                                     raw_clip_path = str(target_file)
                                     used_clip_paths.add(raw_clip_path)
                         except Exception as dl_err:
-                            logger.warning("Download failed for clip %s (%s); falling back to procedural visual", chosen_clip.clip_id, str(dl_err))
+                            logger.warning("Download failed for clip %s (%s); falling back immediately to static image / solid color background clip", chosen_clip.clip_id, str(dl_err))
                             warnings.append(f"Download failed for clip {chosen_clip.clip_id}: {str(dl_err)}")
                             is_real_stock = False
 
-                # Guarantee that every scene has a valid distinct raw_clip_path if downloads failed
+                # Fallback for Media Fetching:
+                # If Pixabay video downloads fail, timeout after 8 seconds, or return empty results,
+                # fall back immediately to downloading a single static image or generating a solid color background clip
+                # using FFmpeg (color=c=black:s=1280x720:d=5) instead of throwing an unhandled exception.
                 if not raw_clip_path:
                     fallback_filename = f"fallback_{sc['scene_id']}.mp4"
                     fallback_file = downloads_dir / fallback_filename
                     primary_ratio = aspect_ratios[0] if aspect_ratios else "16:9"
-                    try:
-                        await generate_visual_fallback(
-                            prompt=query,
-                            output_path=fallback_file,
-                            scene_duration=sc["duration"],
-                            aspect_ratio=primary_ratio,
-                            scene_index=scene_idx,
-                        )
-                        if fallback_file.exists() and fallback_file.stat().st_size > 0:
-                            raw_clip_path = str(fallback_file)
-                            used_clip_paths.add(raw_clip_path)
-                    except Exception as fb_err:
-                        logger.warning("Safety fallback generation failed: %s", str(fb_err))
+                    w, h = ASPECT_RATIO_DIMENSIONS.get(primary_ratio, (1280, 720))
+                    duration_s = max(1.0, float(sc.get("duration", 5.0)))
+
+                    # 1. Fall back to downloading a single static image if thumbnail_url exists
+                    thumb_url = getattr(chosen_clip, "thumbnail_url", None)
+                    if thumb_url and isinstance(thumb_url, str) and thumb_url.startswith("http"):
+                        tmp_thumb = downloads_dir / f"thumb_{sc['scene_id']}.jpg"
+                        try:
+                            with httpx.Client(timeout=5.0, follow_redirects=True) as client:
+                                t_resp = client.get(thumb_url)
+                                if t_resp.status_code == 200 and len(t_resp.content) > 500:
+                                    tmp_thumb.write_bytes(t_resp.content)
+                                    cmd_thumb = [
+                                        ffmpeg_engine.ffmpeg_path,
+                                        "-y",
+                                        "-threads",
+                                        "1",
+                                        "-loop",
+                                        "1",
+                                        "-i",
+                                        str(tmp_thumb),
+                                        "-t",
+                                        str(duration_s),
+                                        "-vf",
+                                        f"scale={w}:{h}:force_original_aspect_ratio=increase,crop={w}:{h}",
+                                        "-c:v",
+                                        "libx264",
+                                        "-preset",
+                                        "ultrafast",
+                                        "-bufsize",
+                                        "1000k",
+                                        "-maxrate",
+                                        "1500k",
+                                        "-pix_fmt",
+                                        "yuv420p",
+                                        "-r",
+                                        "30",
+                                        str(fallback_file),
+                                    ]
+                                    proc_t = subprocess.run(cmd_thumb, capture_output=True, text=True, timeout=15)
+                                    if proc_t.returncode == 0 and fallback_file.exists() and fallback_file.stat().st_size > 0:
+                                        raw_clip_path = str(fallback_file)
+                                        used_clip_paths.add(raw_clip_path)
+                                        logger.info("Successfully used static image fallback for scene %s", sc['scene_id'])
+                        except Exception as t_err:
+                            logger.debug("Static image fallback download failed: %s", str(t_err))
+                        finally:
+                            tmp_thumb.unlink(missing_ok=True)
+
+                    # 2. Or generating a solid color background clip using FFmpeg (color=c=black:s=1280x720:d=5)
+                    if not raw_clip_path:
+                        cmd_solid = [
+                            ffmpeg_engine.ffmpeg_path,
+                            "-y",
+                            "-threads",
+                            "1",
+                            "-f",
+                            "lavfi",
+                            "-i",
+                            f"color=c=black:s={w}x{h}:r=30:d={duration_s}",
+                            "-t",
+                            str(duration_s),
+                            "-c:v",
+                            "libx264",
+                            "-preset",
+                            "ultrafast",
+                            "-bufsize",
+                            "1000k",
+                            "-maxrate",
+                            "1500k",
+                            "-pix_fmt",
+                            "yuv420p",
+                            str(fallback_file),
+                        ]
+                        try:
+                            proc_s = subprocess.run(cmd_solid, capture_output=True, text=True, timeout=15)
+                            if proc_s.returncode == 0 and fallback_file.exists() and fallback_file.stat().st_size > 0:
+                                raw_clip_path = str(fallback_file)
+                                used_clip_paths.add(raw_clip_path)
+                                logger.info("Generated solid color background clip for scene %s: %s", sc['scene_id'], fallback_file.name)
+                            else:
+                                err_tail = proc_s.stderr.strip() if proc_s.stderr else "non-zero return code"
+                                logger.error("Solid color background clip failed: %s", err_tail)
+                        except Exception as s_err:
+                            logger.error("Exception generating solid color clip: %s", str(s_err))
+
+                    # 3. Last resort procedural fallback
+                    if not raw_clip_path:
+                        try:
+                            await generate_visual_fallback(
+                                prompt=query,
+                                output_path=fallback_file,
+                                scene_duration=sc["duration"],
+                                aspect_ratio=primary_ratio,
+                                scene_index=scene_idx,
+                            )
+                            if fallback_file.exists() and fallback_file.stat().st_size > 0:
+                                raw_clip_path = str(fallback_file)
+                                used_clip_paths.add(raw_clip_path)
+                        except Exception as fb_err:
+                            logger.warning("Safety fallback generation failed: %s", str(fb_err))
 
                 is_fallback_clip = (
                     chosen_clip.provider in ("ai_generator", "ai_fallback", "mock_stock_fallback", "ai_generative_fallback")

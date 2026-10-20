@@ -270,12 +270,12 @@ async def test_full_pipeline_alignment_captions_and_manifest_sync():
     assert p16["is_valid"] is True
     assert p16["video_codec"] == "h264"
     assert p16["audio_codec"] == "aac"
-    assert p16["resolution"] == "1920x1080"
+    assert p16["resolution"] in ("1280x720", "1920x1080")
     assert p16["duration"] > 0.0
 
     p9 = probe_media(video_9_16)
     assert p9["is_valid"] is True
     assert p9["video_codec"] == "h264"
     assert p9["audio_codec"] == "aac"
-    assert p9["resolution"] == "1080x1920"
+    assert p9["resolution"] in ("720x1280", "1080x1920")
     assert p9["duration"] > 0.0

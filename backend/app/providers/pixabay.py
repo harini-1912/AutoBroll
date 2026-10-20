@@ -245,7 +245,7 @@ class PixabayFootageProvider(BaseFootageProvider):
         self,
         candidate: FootageCandidate,
         target_path: str,
-        timeout: float = 30.0,
+        timeout: float = 8.0,
         max_bytes: int = 500 * 1024 * 1024,
     ) -> str:
         """Download remote video clip safely with atomic staging and size validation."""
