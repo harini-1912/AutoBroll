@@ -412,8 +412,6 @@ class FFmpegEngine:
             "-y",
             "-threads",
             str(getattr(settings, "FFMPEG_THREADS", 1)),
-            "-max_muxing_queue_size",
-            "512",
             "-f",
             "concat",
             "-safe",
@@ -504,6 +502,8 @@ class FFmpegEngine:
             "-shortest",
             "-movflags",
             "+faststart",
+            "-max_muxing_queue_size",
+            "1024",
             str(output_path),
         ])
 
@@ -523,8 +523,6 @@ class FFmpegEngine:
                     "-y",
                     "-threads",
                     str(getattr(settings, "FFMPEG_THREADS", 1)),
-                    "-max_muxing_queue_size",
-                    "512",
                     "-f",
                     "concat",
                     "-safe",
@@ -546,6 +544,8 @@ class FFmpegEngine:
                     "-shortest",
                     "-movflags",
                     "+faststart",
+                    "-max_muxing_queue_size",
+                    "1024",
                     str(output_path),
                 ])
                 fb_proc = subprocess.run(fallback_cmd, cwd=str(staging_dir), capture_output=True, text=True, timeout=120)
