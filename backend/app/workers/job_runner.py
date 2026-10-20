@@ -399,6 +399,9 @@ class JobRunner:
                 audio_path=narration_audio_path if narration_audio_path.exists() else None,
                 tts_timestamps=tts_timestamps if tts_timestamps else None,
             )
+            # Optimize scene durations for fast 480p encoding (3-4s max per scene)
+            for sc in scenes_data:
+                sc["duration"] = round(min(4.0, max(1.5, float(sc.get("duration", 3.0)))), 2)
             timings["segmentation"] = round(time.time() - t0, 3)
 
             # -------------------------------------------------------------
@@ -420,7 +423,9 @@ class JobRunner:
             visual_environment = domain_context.get("visual_environment", "modern daylight interior")
             logger.info("Script-level domain anchoring: primary_domain='%s', visual_environment='%s'", primary_domain, visual_environment)
 
-            for sc in scenes_data:
+            lock = asyncio.Lock()
+
+            async def resolve_scene_footage(sc: Dict[str, Any], scene_idx: int) -> None:
                 if not sc.get("visual_hint"):
                     sc["visual_hint"] = parse_visual_query(
                         sc["text"],
@@ -435,46 +440,52 @@ class JobRunner:
 
                 # 1. Try Primary Provider (Pixabay by default)
                 try:
-                    candidates = self.primary_footage_provider.search(
+                    candidates = await asyncio.to_thread(
+                        self.primary_footage_provider.search,
                         query,
                         min_duration=sc["duration"],
                         avoid_terms=avoid_list,
                         primary_domain=primary_domain,
                         context=full_script_context,
                     )
-                    for cand in candidates:
-                        if cand.clip_id not in used_clip_ids and cand.licence:
-                            chosen_clip = cand
-                            chosen_provider = self.primary_footage_provider
-                            selection_reason = f"Primary provider ({cand.provider}) match on '{query[:25]}'"
-                            break
+                    async with lock:
+                        for cand in candidates:
+                            if cand.clip_id not in used_clip_ids and cand.licence:
+                                chosen_clip = cand
+                                chosen_provider = self.primary_footage_provider
+                                selection_reason = f"Primary provider ({cand.provider}) match on '{query[:25]}'"
+                                used_clip_ids.add(cand.clip_id)
+                                break
                 except Exception as e:
                     logger.warning("Primary footage provider failed for scene %s: %s", sc["scene_id"], str(e))
-                    warnings.append(f"Primary provider failed for scene {sc['scene_id']}: {str(e)}")
+                    async with lock:
+                        warnings.append(f"Primary provider failed for scene {sc['scene_id']}: {str(e)}")
 
                 # 2. Try Secondary Provider Fallback (Pexels)
                 if not chosen_clip:
                     try:
-                        candidates = self.secondary_footage_provider.search(
+                        candidates = await asyncio.to_thread(
+                            self.secondary_footage_provider.search,
                             query,
                             min_duration=sc["duration"],
                             avoid_terms=avoid_list,
                             primary_domain=primary_domain,
                             context=full_script_context,
                         )
-                        for cand in candidates:
-                            if cand.clip_id not in used_clip_ids and cand.licence:
-                                chosen_clip = cand
-                                chosen_provider = self.secondary_footage_provider
-                                selection_reason = f"Secondary fallback provider ({cand.provider}) match on '{query[:25]}'"
-                                warnings.append(f"Scene {sc['scene_id']} used secondary footage provider fallback.")
-                                break
+                        async with lock:
+                            for cand in candidates:
+                                if cand.clip_id not in used_clip_ids and cand.licence:
+                                    chosen_clip = cand
+                                    chosen_provider = self.secondary_footage_provider
+                                    selection_reason = f"Secondary fallback provider ({cand.provider}) match on '{query[:25]}'"
+                                    used_clip_ids.add(cand.clip_id)
+                                    warnings.append(f"Scene {sc['scene_id']} used secondary footage provider fallback.")
+                                    break
                     except Exception as e:
                         logger.warning("Secondary footage provider failed for scene %s: %s", sc["scene_id"], str(e))
 
                 # 3. Try Multi-Tier AI / Local Motion Graphic Fallback
                 raw_clip_path = None
-                scene_idx = sc.get("scene_index", 0)
                 if not chosen_clip:
                     # Check if all providers are forced to fail by monkeypatching fallback_ai_provider to EmptyProvider
                     if self.fallback_ai_provider and self.fallback_ai_provider.__class__.__name__ == "EmptyProvider":
@@ -496,7 +507,8 @@ class JobRunner:
 
                     if fallback_file.exists() and fallback_file.stat().st_size > 0:
                         raw_clip_path = str(fallback_file)
-                        used_clip_paths.add(raw_clip_path)
+                        async with lock:
+                            used_clip_paths.add(raw_clip_path)
                         chosen_clip = FootageCandidate(
                             clip_id=f"fallback_ai_{sc['scene_id']}",
                             provider="ai_generator",
@@ -506,45 +518,50 @@ class JobRunner:
                             attribution="Pollinations AI / Local Motion Graphic Engine",
                             is_ai_generated=True,
                             duration=sc["duration"],
-                            width=1920,
-                            height=1080,
+                            width=854,
+                            height=480,
                             fps=25.0,
                             tags=["ai_fallback", "motion_graphic"],
                             is_real_footage=True,
                         )
                         selection_reason = "Multi-tier AI / local motion graphic fallback asset generated."
-                        warnings.append(f"Scene {sc['scene_id']} fell back to AI/motion graphic generator.")
+                        async with lock:
+                            warnings.append(f"Scene {sc['scene_id']} fell back to AI/motion graphic generator.")
                     elif self.fallback_ai_provider:
-                        candidates = self.fallback_ai_provider.search(query, min_duration=sc["duration"], avoid_terms=avoid_list)
+                        candidates = await asyncio.to_thread(
+                            self.fallback_ai_provider.search, query, min_duration=sc["duration"], avoid_terms=avoid_list
+                        )
                         if candidates:
-                            unused = [c for c in candidates if c.clip_id not in used_clip_ids]
-                            if unused:
-                                chosen_clip = unused[0]
-                            else:
-                                dyn_id = f"mock_{uuid.uuid4().hex[:8]}"
-                                chosen_clip = FootageCandidate(
-                                    clip_id=dyn_id,
-                                    provider=getattr(self.fallback_ai_provider, "provider_name", "ai_generative"),
-                                    source_url=f"https://images.incubrix.test/footage/{dyn_id}",
-                                    download_url=f"https://images.incubrix.test/footage/{dyn_id}.mp4",
-                                    licence="Proprietary AI / Commercial Clean",
-                                    attribution="IncuBrix AI Motion Engine",
-                                    is_ai_generated=True,
-                                    duration=sc["duration"],
-                                    width=1920,
-                                    height=1080,
-                                    fps=30.0,
-                                    tags=[primary_domain, "distinct"],
-                                    is_real_footage=False,
-                                )
+                            async with lock:
+                                unused = [c for c in candidates if c.clip_id not in used_clip_ids]
+                                if unused:
+                                    chosen_clip = unused[0]
+                                    used_clip_ids.add(chosen_clip.clip_id)
+                                else:
+                                    dyn_id = f"mock_{uuid.uuid4().hex[:8]}"
+                                    chosen_clip = FootageCandidate(
+                                        clip_id=dyn_id,
+                                        provider=getattr(self.fallback_ai_provider, "provider_name", "ai_generative"),
+                                        source_url=f"https://images.incubrix.test/footage/{dyn_id}",
+                                        download_url=f"https://images.incubrix.test/footage/{dyn_id}.mp4",
+                                        licence="Proprietary AI / Commercial Clean",
+                                        attribution="IncuBrix AI Motion Engine",
+                                        is_ai_generated=True,
+                                        duration=sc["duration"],
+                                        width=854,
+                                        height=480,
+                                        fps=30.0,
+                                        tags=[primary_domain, "distinct"],
+                                        is_real_footage=False,
+                                    )
+                                    used_clip_ids.add(chosen_clip.clip_id)
                             chosen_provider = self.fallback_ai_provider
                             selection_reason = "Curated AI motion fallback asset selected."
-                            warnings.append(f"Scene {sc['scene_id']} fell back to procedural AI motion asset.")
+                            async with lock:
+                                warnings.append(f"Scene {sc['scene_id']} fell back to procedural AI motion asset.")
 
                 if not chosen_clip:
                     raise FootageNotFoundError(f"No licence-clean footage available for scene {sc['scene_id']} ('{query}').")
-
-                used_clip_ids.add(chosen_clip.clip_id)
 
                 # Download / resolve video asset if real stock footage and not already resolved
                 is_real_stock = getattr(chosen_clip, "is_real_footage", False)
@@ -563,44 +580,45 @@ class JobRunner:
                         and footage_provider_service.verify_input_clip_freshness(cached_clip, start_time, job_dir=job_dir)
                     ):
                         raw_clip_path = str(cached_clip)
-                        used_clip_paths.add(raw_clip_path)
+                        async with lock:
+                            used_clip_paths.add(raw_clip_path)
                     else:
                         clip_filename = f"{chosen_clip.clip_id}.mp4"
                         target_file = downloads_dir / clip_filename
                         try:
-                            chosen_provider.download_clip(chosen_clip, str(target_file), timeout=8.0)
+                            await asyncio.to_thread(chosen_provider.download_clip, chosen_clip, str(target_file), timeout=8.0)
                             if target_file.exists() and target_file.stat().st_size > 1000:
                                 if footage_provider_service.verify_input_clip_freshness(target_file, start_time, job_dir=job_dir):
                                     raw_clip_path = str(target_file)
-                                    used_clip_paths.add(raw_clip_path)
+                                    async with lock:
+                                        used_clip_paths.add(raw_clip_path)
                                     footage_provider_service.store_cached_clip(chosen_clip.provider, query, job_id, target_file)
                                 else:
                                     logger.warning("Downloaded clip %s failed freshness verification", target_file)
                                     raw_clip_path = str(target_file)
-                                    used_clip_paths.add(raw_clip_path)
+                                    async with lock:
+                                        used_clip_paths.add(raw_clip_path)
                         except Exception as dl_err:
                             logger.warning("Download failed for clip %s (%s); falling back immediately to static image / solid color background clip", chosen_clip.clip_id, str(dl_err))
-                            warnings.append(f"Download failed for clip {chosen_clip.clip_id}: {str(dl_err)}")
+                            async with lock:
+                                warnings.append(f"Download failed for clip {chosen_clip.clip_id}: {str(dl_err)}")
                             is_real_stock = False
 
-                # Fallback for Media Fetching:
-                # If Pixabay video downloads fail, timeout after 8 seconds, or return empty results,
-                # fall back immediately to downloading a single static image or generating a solid color background clip
-                # using FFmpeg (color=c=black:s=1280x720:d=5) instead of throwing an unhandled exception.
+                # Fallback for Media Fetching
                 if not raw_clip_path:
                     fallback_filename = f"fallback_{sc['scene_id']}.mp4"
                     fallback_file = downloads_dir / fallback_filename
                     primary_ratio = aspect_ratios[0] if aspect_ratios else "16:9"
-                    w, h = ASPECT_RATIO_DIMENSIONS.get(primary_ratio, (1280, 720))
-                    duration_s = max(1.0, float(sc.get("duration", 5.0)))
+                    w, h = ASPECT_RATIO_DIMENSIONS.get(primary_ratio, (854, 480))
+                    duration_s = max(1.0, float(sc.get("duration", 3.0)))
 
                     # 1. Fall back to downloading a single static image if thumbnail_url exists
                     thumb_url = getattr(chosen_clip, "thumbnail_url", None)
                     if thumb_url and isinstance(thumb_url, str) and thumb_url.startswith("http"):
                         tmp_thumb = downloads_dir / f"thumb_{sc['scene_id']}.jpg"
                         try:
-                            with httpx.Client(timeout=5.0, follow_redirects=True) as client:
-                                t_resp = client.get(thumb_url)
+                            async with httpx.AsyncClient(timeout=5.0, follow_redirects=True) as client:
+                                t_resp = await client.get(thumb_url)
                                 if t_resp.status_code == 200 and len(t_resp.content) > 500:
                                     tmp_thumb.write_bytes(t_resp.content)
                                     cmd_thumb = [
@@ -620,27 +638,33 @@ class JobRunner:
                                         "libx264",
                                         "-preset",
                                         "ultrafast",
+                                        "-tune",
+                                        "fastdecode",
+                                        "-crf",
+                                        "28",
                                         "-bufsize",
-                                        "1000k",
+                                        "500k",
                                         "-maxrate",
-                                        "1500k",
+                                        "800k",
                                         "-pix_fmt",
                                         "yuv420p",
                                         "-r",
                                         "30",
                                         str(fallback_file),
                                     ]
-                                    proc_t = subprocess.run(cmd_thumb, capture_output=True, text=True, timeout=15)
+                                    gc.collect()
+                                    proc_t = await asyncio.to_thread(subprocess.run, cmd_thumb, capture_output=True, text=True, timeout=15)
                                     if proc_t.returncode == 0 and fallback_file.exists() and fallback_file.stat().st_size > 0:
                                         raw_clip_path = str(fallback_file)
-                                        used_clip_paths.add(raw_clip_path)
+                                        async with lock:
+                                            used_clip_paths.add(raw_clip_path)
                                         logger.info("Successfully used static image fallback for scene %s", sc['scene_id'])
                         except Exception as t_err:
                             logger.debug("Static image fallback download failed: %s", str(t_err))
                         finally:
                             tmp_thumb.unlink(missing_ok=True)
 
-                    # 2. Or generating a solid color background clip using FFmpeg (color=c=black:s=1280x720:d=5)
+                    # 2. Or generating a solid color background clip using FFmpeg
                     if not raw_clip_path:
                         cmd_solid = [
                             ffmpeg_engine.ffmpeg_path,
@@ -657,19 +681,25 @@ class JobRunner:
                             "libx264",
                             "-preset",
                             "ultrafast",
+                            "-tune",
+                            "fastdecode",
+                            "-crf",
+                            "28",
                             "-bufsize",
-                            "1000k",
+                            "500k",
                             "-maxrate",
-                            "1500k",
+                            "800k",
                             "-pix_fmt",
                             "yuv420p",
                             str(fallback_file),
                         ]
                         try:
-                            proc_s = subprocess.run(cmd_solid, capture_output=True, text=True, timeout=15)
+                            gc.collect()
+                            proc_s = await asyncio.to_thread(subprocess.run, cmd_solid, capture_output=True, text=True, timeout=15)
                             if proc_s.returncode == 0 and fallback_file.exists() and fallback_file.stat().st_size > 0:
                                 raw_clip_path = str(fallback_file)
-                                used_clip_paths.add(raw_clip_path)
+                                async with lock:
+                                    used_clip_paths.add(raw_clip_path)
                                 logger.info("Generated solid color background clip for scene %s: %s", sc['scene_id'], fallback_file.name)
                             else:
                                 err_tail = proc_s.stderr.strip() if proc_s.stderr else "non-zero return code"
@@ -689,7 +719,8 @@ class JobRunner:
                             )
                             if fallback_file.exists() and fallback_file.stat().st_size > 0:
                                 raw_clip_path = str(fallback_file)
-                                used_clip_paths.add(raw_clip_path)
+                                async with lock:
+                                    used_clip_paths.add(raw_clip_path)
                         except Exception as fb_err:
                             logger.warning("Safety fallback generation failed: %s", str(fb_err))
 
@@ -716,6 +747,10 @@ class JobRunner:
                     "thumbnail_url": chosen_clip.thumbnail_url,
                 }
                 sc["warnings"] = []
+
+            # Concurrently fetch/download footage across all scenes
+            await asyncio.gather(*(resolve_scene_footage(sc, idx) for idx, sc in enumerate(scenes_data)))
+            gc.collect()
             timings["footage_search"] = round(time.time() - t0, 3)
 
             # -------------------------------------------------------------
@@ -790,7 +825,7 @@ class JobRunner:
 
                 probe_info = await asyncio.to_thread(probe_media, video_path)
                 result_urls[f"video_{ratio_slug}"] = f"{base_url}/api/v1/jobs/download/{job_id}/{video_filename}"
-                dim = probe_info.get("resolution") or ("1920x1080" if r == "16:9" else ("1080x1920" if r == "9:16" else "1080x1080"))
+                dim = probe_info.get("resolution") or ("854x480" if r == "16:9" else ("480x854" if r == "9:16" else "480x480"))
                 outputs_meta[f"video_{ratio_slug}"] = {
                     "aspect_ratio": r,
                     "resolution": dim,
@@ -955,14 +990,13 @@ class JobRunner:
                 except Exception as e:
                     logger.debug("Failed cleaning scratch dir %s: %s", p, str(e))
 
-        # Remove per-ratio scenes directories only if not keeping final artifacts (needed for instant scene swapping)
-        if not keep_final_artifacts:
-            for s_dir in target_dir.glob("scenes_*"):
-                if s_dir.is_dir():
-                    try:
-                        shutil.rmtree(s_dir, ignore_errors=True)
-                    except Exception as e:
-                        logger.debug("Failed cleaning scene dir %s: %s", s_dir, str(e))
+        # Remove per-ratio scenes directories
+        for s_dir in target_dir.glob("scenes_*"):
+            if s_dir.is_dir():
+                try:
+                    shutil.rmtree(s_dir, ignore_errors=True)
+                except Exception as e:
+                    logger.debug("Failed cleaning scene dir %s: %s", s_dir, str(e))
 
         # Remove concat demuxer text files and partial files
         scratch_patterns = ["concat_*.txt", "concat_list.txt", "*.part", "*.tmp*", "*.tmp_ai*", "*.tmp_kenburns*"]

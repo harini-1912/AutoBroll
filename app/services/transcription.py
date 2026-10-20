@@ -205,5 +205,11 @@ class AudioTranscriber:
 
         return " ".join(clean_sentences)
 
+    def _format_transcript_to_sentences(self, raw_or_segments) -> str:
+        """Format raw text or segments into punctuated sentences."""
+        if isinstance(raw_or_segments, str):
+            return self._format_segments_to_sentences([raw_or_segments])
+        return self._format_segments_to_sentences(raw_or_segments)
+
 
 audio_transcriber = AudioTranscriber()

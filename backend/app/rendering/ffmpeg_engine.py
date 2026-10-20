@@ -7,6 +7,7 @@ Handles:
 - Aspect ratio normalization (16:9 -> 1920x1080, 9:16 -> 1080x1920, 1:1 -> 1080x1080)
 - Stream probing and container validation (detecting missing moov atoms and corrupt headers)
 """
+import gc
 import os
 import re
 import shutil
@@ -19,9 +20,9 @@ from app.core.exceptions import RenderFailedError
 from app.core.logging import logger
 
 ASPECT_RATIO_DIMENSIONS: Dict[str, Tuple[int, int]] = {
-    "16:9": (1280, 720),
-    "9:16": (720, 1280),
-    "1:1": (720, 720),
+    "16:9": (854, 480),
+    "9:16": (480, 854),
+    "1:1": (480, 480),
 }
 
 # Curated palette of modern, professional theme colors for scene backgrounds
@@ -184,8 +185,8 @@ class FFmpegEngine:
         if not self.is_available():
             raise RenderFailedError(f"FFmpeg binary not accessible at '{self.ffmpeg_path}'.")
 
-        width, height = ASPECT_RATIO_DIMENSIONS.get(aspect_ratio, (1920, 1080))
-        duration = max(0.5, round(float(duration), 2))
+        width, height = ASPECT_RATIO_DIMENSIONS.get(aspect_ratio, (854, 480))
+        duration = min(4.0, max(0.5, round(float(duration), 2)))
         color = SCENE_PALETTES[scene_index % len(SCENE_PALETTES)]
 
         output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -211,23 +212,24 @@ class FFmpegEngine:
                 "libx264",
                 "-preset",
                 "ultrafast",
-                "-crf",
-                "26",
                 "-tune",
                 "fastdecode",
+                "-crf",
+                "28",
                 "-pix_fmt",
                 "yuv420p",
                 "-r",
                 "30",
                 "-bufsize",
-                "1000k",
+                "500k",
                 "-maxrate",
-                "1500k",
+                "800k",
                 "-an",
                 str(output_path),
             ]
             logger.info("Rendering scene clip %s from stock footage %s (%s, %.2fs, timeout=%ds)", scene_id, Path(raw_video_path).name, aspect_ratio, duration, clip_timeout)
             try:
+                gc.collect()
                 proc_vid = subprocess.run(cmd_video, capture_output=True, text=True, timeout=clip_timeout)
                 if proc_vid.returncode == 0 and output_path.exists() and output_path.stat().st_size > 0:
                     return output_path
@@ -259,7 +261,7 @@ class FFmpegEngine:
         clean_text = clean_text[:60]
 
         escaped_text = clean_text.replace(":", r"\:").replace("'", r"\\\'")
-        font_size = 36 if aspect_ratio != "9:16" else 26
+        font_size = 28 if aspect_ratio != "9:16" else 20
 
         # Try rendering with drawtext overlay
         vf_filter = (
@@ -281,10 +283,14 @@ class FFmpegEngine:
             "libx264",
             "-preset",
             "ultrafast",
+            "-tune",
+            "fastdecode",
+            "-crf",
+            "28",
             "-bufsize",
-            "1000k",
+            "500k",
             "-maxrate",
-            "1500k",
+            "800k",
             "-pix_fmt",
             "yuv420p",
             "-r",
@@ -294,6 +300,7 @@ class FFmpegEngine:
 
         logger.debug("Rendering scene clip %s with procedural text: %s", scene_id, clean_text)
         try:
+            gc.collect()
             proc = subprocess.run(cmd_with_text, capture_output=True, text=True, timeout=clip_timeout)
             if proc.returncode == 0 and output_path.exists() and output_path.stat().st_size > 0:
                 return output_path
@@ -316,10 +323,14 @@ class FFmpegEngine:
             "libx264",
             "-preset",
             "ultrafast",
+            "-tune",
+            "fastdecode",
+            "-crf",
+            "28",
             "-bufsize",
-            "1000k",
+            "500k",
             "-maxrate",
-            "1500k",
+            "800k",
             "-pix_fmt",
             "yuv420p",
             "-r",
@@ -327,6 +338,7 @@ class FFmpegEngine:
             str(output_path),
         ]
         try:
+            gc.collect()
             fallback_proc = subprocess.run(cmd_fallback, capture_output=True, text=True, timeout=clip_timeout)
             if fallback_proc.returncode != 0:
                 err_detail = fallback_proc.stderr.strip() if fallback_proc.stderr else "non-zero return code"
@@ -459,21 +471,21 @@ class FFmpegEngine:
         if should_burn:
             if aspect_ratio == "9:16":
                 force_style = (
-                    "FontName=DejaVu Sans,Arial,sans-serif,FontSize=15,Bold=1,"
+                    "FontName=DejaVu Sans,Arial,sans-serif,FontSize=11,Bold=1,"
                     "PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,BackColour=&H80000000,"
-                    "BorderStyle=1,Outline=2,Shadow=1,Alignment=2,MarginV=40,MarginL=25,MarginR=25"
+                    "BorderStyle=1,Outline=2,Shadow=1,Alignment=2,MarginV=25,MarginL=15,MarginR=15"
                 )
             elif aspect_ratio == "1:1":
                 force_style = (
-                    "FontName=DejaVu Sans,Arial,sans-serif,FontSize=15,Bold=1,"
+                    "FontName=DejaVu Sans,Arial,sans-serif,FontSize=11,Bold=1,"
                     "PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,BackColour=&H80000000,"
-                    "BorderStyle=1,Outline=2,Shadow=1,Alignment=2,MarginV=30,MarginL=25,MarginR=25"
+                    "BorderStyle=1,Outline=2,Shadow=1,Alignment=2,MarginV=20,MarginL=15,MarginR=15"
                 )
             else:
                 force_style = (
-                    "FontName=DejaVu Sans,Arial,sans-serif,FontSize=16,Bold=1,"
+                    "FontName=DejaVu Sans,Arial,sans-serif,FontSize=12,Bold=1,"
                     "PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,BackColour=&H80000000,"
-                    "BorderStyle=1,Outline=2,Shadow=1,Alignment=2,MarginV=25,MarginL=30,MarginR=30"
+                    "BorderStyle=1,Outline=2,Shadow=1,Alignment=2,MarginV=18,MarginL=20,MarginR=20"
                 )
             subtitle_filter = f"subtitles={srt_filename}:force_style='{force_style}'"
             logger.info("Assembling video with burned-in subtitles for %s (filter: %s)", aspect_ratio, subtitle_filter)
@@ -484,14 +496,14 @@ class FFmpegEngine:
                 "libx264",
                 "-preset",
                 "ultrafast",
-                "-crf",
-                "26",
                 "-tune",
                 "fastdecode",
+                "-crf",
+                "28",
                 "-bufsize",
-                "1000k",
+                "500k",
                 "-maxrate",
-                "1500k",
+                "800k",
                 "-pix_fmt",
                 "yuv420p",
                 "-r",
@@ -507,7 +519,7 @@ class FFmpegEngine:
             "-c:a",
             "aac",
             "-b:a",
-            "192k",
+            "128k",
             "-shortest",
             "-movflags",
             "+faststart",
@@ -519,6 +531,7 @@ class FFmpegEngine:
         assembly_timeout = max(300, int(sum(sc.get("duration", 2.0) for sc in scenes_data) * 10))
         logger.info("Executing video assembly for aspect ratio %s -> %s (burn_in=%s, timeout=%ds)", aspect_ratio, output_path.name, should_burn, assembly_timeout)
         try:
+            gc.collect()
             proc = subprocess.run(cmd, cwd=str(staging_dir), capture_output=True, text=True, timeout=assembly_timeout)
             if proc.returncode != 0:
                 err_tail = proc.stderr.strip() if proc.stderr else "non-zero exit code"
@@ -551,7 +564,7 @@ class FFmpegEngine:
                     "-c:a",
                     "aac",
                     "-b:a",
-                    "192k",
+                    "128k",
                     "-shortest",
                     "-movflags",
                     "+faststart",
@@ -559,6 +572,7 @@ class FFmpegEngine:
                     "1024",
                     str(output_path),
                 ])
+                gc.collect()
                 fb_proc = subprocess.run(fallback_cmd, cwd=str(staging_dir), capture_output=True, text=True, timeout=120)
                 if fb_proc.returncode != 0:
                     fb_tail = fb_proc.stderr.strip() if fb_proc.stderr else "non-zero returncode"

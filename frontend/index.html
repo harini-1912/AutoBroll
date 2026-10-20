@@ -580,9 +580,9 @@
           }
         };
 
-        // Poll immediately and setup interval (3s interval to reduce server CPU load)
+        // Poll immediately and setup interval (3.5s interval to throttle polling and prevent CPU starvation on Render)
         checkStatus();
-        pollingTimerRef.current = setInterval(checkStatus, 3000);
+        pollingTimerRef.current = setInterval(checkStatus, 3500);
 
         return () => {
           if (pollingTimerRef.current) {
