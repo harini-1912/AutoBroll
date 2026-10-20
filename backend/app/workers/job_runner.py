@@ -4,6 +4,7 @@ import json
 import os
 import re
 import shutil
+import subprocess
 import time
 import traceback
 from datetime import datetime, timezone
@@ -34,6 +35,7 @@ from app.services.alignment import narration_aligner
 from app.services.text_parser import parse_visual_query, extract_script_domain_context
 from app.services.ai_fallback_generator import generate_visual_fallback
 from app.services.footage_provider import footage_provider_service
+from app.services.transcription import audio_transcriber
 from app.services.webhook import send_job_webhook
 
 class JobRunner:
@@ -192,8 +194,9 @@ class JobRunner:
             script = req.get("script")
             scenes_input = req.get("scenes")
             audio_url = req.get("audio_url")
+            audio_local_path = req.get("audio_local_path")
 
-            if not any([script, scenes_input, audio_url]):
+            if not any([script, scenes_input, audio_url, audio_local_path]):
                 raise InvalidInputError("No script, scenes, or audio input provided.")
             timings["validation"] = round(time.time() - t0, 3)
 
@@ -337,6 +340,19 @@ class JobRunner:
                     p_info = await asyncio.to_thread(probe_media, narration_audio_path)
                     if p_info.get("duration") and p_info["duration"] > 0:
                         total_duration = p_info["duration"]
+
+                    # If no script or scenes were provided by user, automatically transcribe the speech!
+                    if not script and not scenes_input:
+                        db.update_job_progress(job_id, "processing", 25, "transcribing_audio")
+                        try:
+                            transcribed_text = await asyncio.to_thread(
+                                audio_transcriber.transcribe, narration_audio_path
+                            )
+                            if transcribed_text:
+                                logger.info("Successfully transcribed uploaded audio for job %s: '%s'", job_id, transcribed_text[:120])
+                                script = transcribed_text
+                        except Exception as e:
+                            logger.warning("Audio transcription encountered an issue for job %s: %s", job_id, e)
             timings["speech"] = round(time.time() - t0, 3)
 
             # -------------------------------------------------------------
@@ -608,6 +624,7 @@ class JobRunner:
             db.update_job_progress(job_id, "processing", 65, "timeline_creation")
             timeline_payload = {
                 "job_id": job_id,
+                "script": script,
                 "total_scenes": len(scenes_data),
                 "total_duration": total_duration,
                 "scenes": scenes_data,
