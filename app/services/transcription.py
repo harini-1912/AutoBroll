@@ -16,18 +16,62 @@ class AudioTranscriber:
     def __init__(self, ffmpeg_path: Optional[str] = None):
         self.ffmpeg_path = ffmpeg_path
 
+    def _transcribe_whisper(self, audio_path: Path) -> Optional[str]:
+        """Transcribe audio using Cloud Whisper API (cloud-safe, fast, and never blocked by datacenter IP filters)."""
+        import os
+        import httpx
+        from app.core.config import settings
+
+        api_key = getattr(settings, "POLLINATIONS_API_KEY", "") or os.getenv(
+            "POLLINATIONS_API_KEY", "sk_GAvJaRf8drlVtRQwBNdHUKWYMdgIFf70"
+        )
+        if not api_key:
+            return None
+
+        url = "https://gen.pollinations.ai/v1/audio/transcriptions"
+        ext = audio_path.suffix.lower()
+        content_type = "audio/mpeg" if ext == ".mp3" else ("audio/wav" if ext == ".wav" else "audio/mp4")
+
+        try:
+            with open(audio_path, "rb") as f:
+                files = {"file": (audio_path.name, f, content_type)}
+                data = {"model": "whisper-1"}
+                headers = {"Authorization": f"Bearer {api_key}"}
+                with httpx.Client(timeout=45.0) as client:
+                    resp = client.post(url, headers=headers, files=files, data=data)
+                    if resp.status_code == 200:
+                        res_json = resp.json()
+                        text = (res_json.get("text") or "").strip()
+                        if text:
+                            logger.info("Successfully transcribed audio via Cloud Whisper: '%s'", text[:100])
+                            return text
+                    else:
+                        logger.warning(
+                            "Cloud Whisper returned HTTP %s: %s; falling back to local STT",
+                            resp.status_code,
+                            resp.text[:150],
+                        )
+        except Exception as e:
+            logger.warning("Cloud Whisper request failed: %s; falling back to local STT", e)
+
+        return None
+
     def transcribe(self, audio_path: Path, max_chunk_duration: float = 12.0) -> Optional[str]:
         """Transcribe spoken voiceover audio into clean text.
         
-        1. Normalizes and amplifies audio using FFmpeg into 16kHz mono PCM WAV.
-        2. Detects exact frame duration using standard wave module.
-        3. Chunks audio into 10-12s segments to avoid Google API timeouts and 400s.
-        4. Transcribes each segment with multi-language fallback (en-US, en-IN, en-GB).
-        5. Formats words into clean, readable sentence structures.
+        1. First tries Cloud Whisper API (fast, punctuation-accurate, works in cloud containers like Render).
+        2. Falls back to local FFmpeg normalization + Google Speech Recognition if Cloud STT is unavailable.
+        3. Formats sentences with clean capitalization and punctuation.
         """
         if not audio_path or not Path(audio_path).exists() or Path(audio_path).stat().st_size == 0:
             return None
 
+        # Tier 1: Cloud Whisper API
+        whisper_text = self._transcribe_whisper(audio_path)
+        if whisper_text and len(whisper_text.strip()) > 3:
+            return self._format_segments_to_sentences([whisper_text])
+
+        # Tier 2: Local Google Speech Recognition with loudness normalization
         import speech_recognition as sr
         from app.rendering.ffmpeg_engine import probe_media, ffmpeg_engine
 
