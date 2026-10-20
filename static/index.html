@@ -360,7 +360,8 @@
         {"text": "A creator records a voiceover about saving money.", "visual_hint": "piggy bank or digital finance dashboard"},
         {"text": "Financial freedom requires discipline and smart planning.", "visual_hint": "stock chart growth and team meeting"}
       ], null, 2));
-      const [audioUrl, setAudioUrl] = useState('https://images.incubrix.test/audio/sample_voiceover.mp3');
+      const [audioUrl, setAudioUrl] = useState('');
+      const [audioTranscript, setAudioTranscript] = useState('');
       const [audioInputType, setAudioInputType] = useState('file'); // 'file' or 'url'
       const [audioFile, setAudioFile] = useState(null);
       const [voice, setVoice] = useState('en-IN-female');
@@ -427,7 +428,7 @@
             formData.append('aspect_ratios', aspectRatios.join(','));
             formData.append('style', style);
             if (avoid) formData.append('avoid', avoid);
-            if (script && script.trim()) formData.append('script', script.trim());
+            if (audioTranscript && audioTranscript.trim()) formData.append('script', audioTranscript.trim());
             formData.append('burn_in_captions', 'true');
 
             res = await fetch('/api/v1/broll/jobs/upload', {
@@ -451,7 +452,13 @@
             } else if (inputMode === 'scenes') {
               payload.scenes = JSON.parse(scenesText);
             } else {
-              payload.audio_url = audioUrl;
+              if (!audioUrl || !audioUrl.trim()) {
+                throw new Error('Please enter a valid public audio URL (.mp3 or .wav).');
+              }
+              payload.audio_url = audioUrl.trim();
+              if (audioTranscript && audioTranscript.trim()) {
+                payload.script = audioTranscript.trim();
+              }
             }
 
             res = await fetch('/api/v1/broll/jobs', {
@@ -863,9 +870,9 @@
                             <label style={{fontSize: '0.8rem'}}>Voiceover Script / Topic (Optional)</label>
                             <textarea
                               rows="3"
-                              value={script}
-                              onChange={e => setScript(e.target.value)}
-                              placeholder="Paste the spoken script or topic summary here to ensure stock footage perfectly matches what is said..."
+                              value={audioTranscript}
+                              onChange={e => setAudioTranscript(e.target.value)}
+                              placeholder="Leave blank to automatically transcribe speech from your audio, or paste a transcript..."
                               style={{fontSize: '0.82rem'}}
                             />
                           </div>
@@ -877,9 +884,21 @@
                             type="text"
                             value={audioUrl}
                             onChange={e => setAudioUrl(e.target.value)}
-                            required
-                            placeholder="https://images.incubrix.test/audio/sample.mp3"
+                            placeholder="https://example.com/audio/sample_voiceover.mp3"
                           />
+                          <p style={{fontSize: '0.75rem', color: '#64748b', marginTop: '0.35rem'}}>
+                            Engine automatically downloads and transcribes speech from public audio files.
+                          </p>
+                          <div className="form-group" style={{marginTop: '0.85rem'}}>
+                            <label style={{fontSize: '0.8rem'}}>Voiceover Script / Topic (Optional)</label>
+                            <textarea
+                              rows="3"
+                              value={audioTranscript}
+                              onChange={e => setAudioTranscript(e.target.value)}
+                              placeholder="Leave blank to automatically transcribe speech from audio URL, or paste a transcript..."
+                              style={{fontSize: '0.82rem'}}
+                            />
+                          </div>
                         </div>
                       )}
                     </div>

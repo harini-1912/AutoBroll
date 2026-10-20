@@ -341,15 +341,27 @@ class JobRunner:
                     if p_info.get("duration") and p_info["duration"] > 0:
                         total_duration = p_info["duration"]
 
-                    # If no script or scenes were provided by user, automatically transcribe the speech!
-                    if not script and not scenes_input:
+                    # If audio was provided, check if script is empty or matches dummy template
+                    DEFAULT_SAMPLE_PHRASES = [
+                        "saving money",
+                        "investing with patience",
+                        "financial freedom",
+                        "creator records a sixty-second voiceover",
+                        "creator records a video about saving money",
+                    ]
+                    is_dummy_template = bool(
+                        script and any(phrase in script.lower() for phrase in DEFAULT_SAMPLE_PHRASES)
+                    )
+
+                    # Automatically transcribe the audio speech!
+                    if (not script or is_dummy_template) and not scenes_input:
                         db.update_job_progress(job_id, "processing", 25, "transcribing_audio")
                         try:
                             transcribed_text = await asyncio.to_thread(
                                 audio_transcriber.transcribe, narration_audio_path
                             )
-                            if transcribed_text:
-                                logger.info("Successfully transcribed uploaded audio for job %s: '%s'", job_id, transcribed_text[:120])
+                            if transcribed_text and len(transcribed_text.strip()) > 3:
+                                logger.info("Successfully transcribed audio for job %s: '%s'", job_id, transcribed_text[:120])
                                 script = transcribed_text
                         except Exception as e:
                             logger.warning("Audio transcription encountered an issue for job %s: %s", job_id, e)
@@ -371,7 +383,7 @@ class JobRunner:
                         "visual_hint": sc.get("visual_hint"),
                     })
             else:
-                raw_text = script or "A creator records a video about saving money and building value."
+                raw_text = script or "Voiceover narration and dynamic visual presentation."
                 sentences = [s.strip() for s in re.split(r"[.!?]+", raw_text) if s.strip()]
                 if not sentences:
                     sentences = [raw_text]
