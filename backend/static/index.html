@@ -562,12 +562,15 @@
               }
             } else if (res.status === 404) {
               consecutiveErrors += 1;
-              if (consecutiveErrors > 4) {
+              if (consecutiveErrors > 6) {
                 setJobStatus(prev => ({
                   ...prev,
                   status: 'failed',
                   stage: 'not_found',
-                  error: 'Job session expired or server restarted. Please click Generate B-Roll Video to restart.'
+                  error: {
+                    code: 'JOB_NOT_FOUND',
+                    message: 'Job was not found or server restarted. Please click Generate B-Roll Video to start a new job.'
+                  }
                 }));
                 if (pollingTimerRef.current) {
                   clearInterval(pollingTimerRef.current);
@@ -1322,7 +1325,14 @@
 
                   {jobStatus.error && (
                     <div className="error-box">
-                      <strong>Error [{jobStatus.error.code}]:</strong> {jobStatus.error.message}
+                      <strong>
+                        Error {typeof jobStatus.error === 'object' && jobStatus.error && jobStatus.error.code ? `[${jobStatus.error.code}]:` : ':'}
+                      </strong>{' '}
+                      {typeof jobStatus.error === 'string'
+                        ? jobStatus.error
+                        : Array.isArray(jobStatus.error)
+                        ? (jobStatus.error.length > 0 ? jobStatus.error.map(e => typeof e === 'object' ? (e.message || JSON.stringify(e)) : String(e)).join(', ') : 'An unknown error occurred during rendering.')
+                        : (jobStatus.error?.message || JSON.stringify(jobStatus.error))}
                     </div>
                   )}
 

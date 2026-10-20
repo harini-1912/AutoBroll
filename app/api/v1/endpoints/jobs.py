@@ -10,6 +10,7 @@ from pathlib import Path
 from app.core.config import settings
 from app.core.database import db
 from app.core.exceptions import (
+    AssetNotFoundError,
     IdempotencyConflictError,
     InvalidInputError,
     JobNotFoundError,
@@ -362,7 +363,7 @@ def download_asset(
         if storage.exists(rel_path):
             data = storage.get_file_bytes(rel_path)
             return Response(content=data, media_type=media_type, headers=headers)
-        raise JobNotFoundError(f"File '{safe_name}' for job '{job_id}' not found.")
+        raise AssetNotFoundError(f"AssetNotFound: Could not find required file at {target_file}")
 
     return FileResponse(
         path=str(target_file),

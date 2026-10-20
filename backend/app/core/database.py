@@ -13,18 +13,19 @@ class Database:
 
     def __init__(self, db_path: Optional[str] = None):
         if db_path is None:
-            # Extract file path from sqlite:///./data/incubrix.db
             raw_url = settings.DATABASE_URL
             if raw_url.startswith("sqlite:///"):
                 self.db_path = raw_url.replace("sqlite:///", "")
             else:
-                self.db_path = "./data/incubrix.db"
+                self.db_path = raw_url
         else:
             self.db_path = db_path
 
         # Ensure directory exists if not in-memory
         if self.db_path != ":memory:":
-            Path(self.db_path).parent.mkdir(parents=True, exist_ok=True)
+            db_file = Path(self.db_path).resolve()
+            self.db_path = str(db_file)
+            db_file.parent.mkdir(parents=True, exist_ok=True)
 
         self._local = threading.local()
         self._lock = threading.Lock()

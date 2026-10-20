@@ -408,24 +408,28 @@ class FFmpegEngine:
 
         # 2. Verify that every input .mp4 file exists, is valid, and was created during the current job run
         for fname in clip_filenames:
-            clip_file = staging_dir / fname
+            clip_file = (staging_dir / fname).resolve()
             if not clip_file.exists() or clip_file.stat().st_size == 0:
                 raise RenderFailedError(
-                    f"Input scene clip '{fname}' is missing or empty before compiling concat list."
+                    f"AssetNotFound: Could not find required input scene clip at '{clip_file}' before compiling concat list."
                 )
             if job_start_time is not None:
-                # Verify clip was created during current job execution window (allowing 5s clock skew)
-                if clip_file.stat().st_mtime < (job_start_time - 5.0):
+                # Verify clip was created during current job execution window (allowing 30s clock skew)
+                if clip_file.stat().st_mtime < (job_start_time - 30.0):
                     raise RenderFailedError(
-                        f"Input scene clip '{fname}' was not created during the current job run (mtime={clip_file.stat().st_mtime}, job_start={job_start_time})."
+                        f"AssetNotFound: Input scene clip '{clip_file}' was not created during the current job run (mtime={clip_file.stat().st_mtime}, job_start={job_start_time})."
                     )
 
         # 3. Write concat demuxer files inside staging directory (both ratio-specific and concat_list.txt)
-        concat_file = staging_dir / f"concat_{ratio_slug}.txt"
-        concat_list_file = staging_dir / "concat_list.txt"
+        concat_file = (staging_dir / f"concat_{ratio_slug}.txt").resolve()
+        concat_list_file = (staging_dir / "concat_list.txt").resolve()
         concat_content = "\n".join([f"file '{fname}'" for fname in clip_filenames]) + "\n"
         concat_file.write_text(concat_content, encoding="utf-8")
         concat_list_file.write_text(concat_content, encoding="utf-8")
+        if not concat_file.exists() or concat_file.stat().st_size == 0:
+            raise RenderFailedError(
+                f"AssetNotFound: Could not find required concat demuxer file at '{concat_file}'"
+            )
 
         # 3. Assemble and mux with narration audio (and burned-in captions if requested)
         cmd = [
@@ -588,6 +592,10 @@ class FFmpegEngine:
                 )
 
         # 4. Rigorous validation of the resulting output file
+        if not output_path.exists() or output_path.stat().st_size == 0:
+            raise RenderFailedError(
+                f"AssetNotFound: Could not find required rendered video output at '{output_path}'"
+            )
         probe_info = probe_media(output_path, ffmpeg_path=self.ffmpeg_path)
         if not probe_info["is_valid"]:
             raise RenderFailedError(

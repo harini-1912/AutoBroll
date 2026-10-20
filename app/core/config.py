@@ -42,6 +42,35 @@ def _resolve_ffprobe_path() -> str:
             return str(probe_unix)
     return "ffprobe"
 
+def _resolve_storage_dir() -> str:
+    custom = os.getenv("LOCAL_STORAGE_DIR")
+    if custom:
+        return str(Path(custom).resolve())
+    if os.name != "nt":
+        return "/tmp/autobroll/storage"
+    return str(Path("./storage").resolve())
+
+def _resolve_artifacts_dir() -> str:
+    custom = os.getenv("ARTIFACTS_DIR") or os.getenv("LOCAL_STORAGE_DIR")
+    if custom:
+        return str(Path(custom).resolve())
+    if os.name != "nt":
+        return "/tmp/autobroll/artifacts"
+    return str(Path("./storage").resolve())
+
+def _resolve_database_url() -> str:
+    custom = os.getenv("DATABASE_URL")
+    if custom:
+        if custom.startswith("sqlite:///./"):
+            rel_part = custom.replace("sqlite:///./", "")
+            if os.name != "nt":
+                return f"sqlite:////tmp/autobroll/{rel_part}"
+            return f"sqlite:///{Path(rel_part).resolve().as_posix()}"
+        return custom
+    if os.name != "nt":
+        return "sqlite:////tmp/autobroll/data/incubrix.db"
+    return f"sqlite:///{Path('data/incubrix.db').resolve().as_posix()}"
+
 class Settings(BaseModel):
     # Environment
     ENVIRONMENT: str = Field(default_factory=lambda: os.getenv("ENVIRONMENT", "development"))
@@ -60,8 +89,8 @@ class Settings(BaseModel):
 
     # Storage
     STORAGE_BACKEND: str = Field(default_factory=lambda: os.getenv("STORAGE_BACKEND", "local"))
-    LOCAL_STORAGE_DIR: str = Field(default_factory=lambda: os.getenv("LOCAL_STORAGE_DIR", "./storage"))
-    ARTIFACTS_DIR: str = Field(default_factory=lambda: os.getenv("ARTIFACTS_DIR", os.getenv("LOCAL_STORAGE_DIR", "./storage")))
+    LOCAL_STORAGE_DIR: str = Field(default_factory=_resolve_storage_dir)
+    ARTIFACTS_DIR: str = Field(default_factory=_resolve_artifacts_dir)
     BASE_URL: str = Field(default_factory=lambda: os.getenv("BASE_URL", "http://localhost:8000"))
 
     # S3 / MinIO
@@ -73,7 +102,7 @@ class Settings(BaseModel):
     S3_USE_SSL: bool = Field(default_factory=lambda: os.getenv("S3_USE_SSL", "false").lower() == "true")
 
     # Database
-    DATABASE_URL: str = Field(default_factory=lambda: os.getenv("DATABASE_URL", "sqlite:///./data/incubrix.db"))
+    DATABASE_URL: str = Field(default_factory=_resolve_database_url)
 
     # Media Binaries
     FFMPEG_PATH: str = Field(default_factory=_resolve_ffmpeg_path)
@@ -96,10 +125,16 @@ class Settings(BaseModel):
     JOB_RETENTION_HOURS: int = Field(default_factory=lambda: int(os.getenv("JOB_RETENTION_HOURS", "24")))
 
     def ensure_directories(self) -> None:
-        """Create necessary data, storage, and temp directories."""
-        Path(self.LOCAL_STORAGE_DIR).mkdir(parents=True, exist_ok=True)
-        Path("./data").mkdir(parents=True, exist_ok=True)
-        Path("./temp").mkdir(parents=True, exist_ok=True)
+        """Create necessary data, storage, and temp directories with absolute paths."""
+        for dir_path in [self.LOCAL_STORAGE_DIR, self.ARTIFACTS_DIR]:
+            p = Path(dir_path).resolve()
+            p.mkdir(parents=True, exist_ok=True)
+        if os.name != "nt":
+            Path("/tmp/autobroll/data").mkdir(parents=True, exist_ok=True)
+            Path("/tmp/autobroll/temp").mkdir(parents=True, exist_ok=True)
+        else:
+            Path("./data").resolve().mkdir(parents=True, exist_ok=True)
+            Path("./temp").resolve().mkdir(parents=True, exist_ok=True)
 
 settings = Settings()
 settings.ensure_directories()

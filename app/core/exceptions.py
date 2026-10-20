@@ -109,6 +109,16 @@ class FootageNotFoundError(AppException):
             details=details,
         )
 
+class AssetNotFoundError(AppException):
+    def __init__(self, message: str, details: Optional[Dict[str, Any]] = None):
+        super().__init__(
+            code="ASSET_NOT_FOUND",
+            message=message,
+            status_code=404,
+            retryable=False,
+            details=details,
+        )
+
 class RenderFailedError(AppException):
     def __init__(self, message: str, details: Optional[Dict[str, Any]] = None):
         super().__init__(

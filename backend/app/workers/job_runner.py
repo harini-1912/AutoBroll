@@ -18,6 +18,7 @@ from app.core.config import settings
 from app.core.database import db
 from app.core.exceptions import (
     AppException,
+    AssetNotFoundError,
     AudioProcessingError,
     FootageNotFoundError,
     InvalidInputError,
@@ -145,14 +146,20 @@ class JobRunner:
                 db.start_job(job_id)
                 await self.execute_job(job_id)
             except Exception as e:
+                import sys
                 logger.error("Job %s encountered unexpected fatal exception: %s", job_id, str(e), exc_info=True)
+                traceback.print_exc(file=sys.stdout)
+                sys.stdout.flush()
+                latest_job = db.get_job(job_id)
+                current_stage = latest_job.get("stage", "failed") if latest_job else "failed"
+                err_msg = str(e).strip() or f"AssetNotFound or processing failure: {type(e).__name__}"
                 error_dict = {
                     "code": getattr(e, "code", "INTERNAL_PROCESSING_ERROR"),
-                    "message": str(e),
+                    "message": err_msg,
                     "retryable": getattr(e, "retryable", False),
                     "details": {"traceback": traceback.format_exc()},
                 }
-                db.complete_job_failure(job_id, error_dict)
+                db.complete_job_failure(job_id, error_dict, stage=current_stage)
             finally:
                 job_id_ctx.set(None)
 
@@ -173,12 +180,12 @@ class JobRunner:
         timings: Dict[str, float] = {}
         job_succeeded = False
 
-        # 1. Unique Isolated Job Directory
-        job_dir = Path(settings.ARTIFACTS_DIR) / f"job_{uuid.uuid4().hex}"
-        job_dir.mkdir(parents=True, exist_ok=True)
+        # 1. Unique Isolated Job Directory using absolute paths
+        job_dir = (Path(settings.ARTIFACTS_DIR).resolve() / f"job_{uuid.uuid4().hex}").resolve()
+        os.makedirs(job_dir, exist_ok=True)
         staging_dir = job_dir
-        final_dir = Path(settings.LOCAL_STORAGE_DIR) / job_id
-        final_dir.mkdir(parents=True, exist_ok=True)
+        final_dir = (Path(settings.LOCAL_STORAGE_DIR).resolve() / job_id).resolve()
+        os.makedirs(final_dir, exist_ok=True)
 
         try:
             # -------------------------------------------------------------
@@ -605,9 +612,10 @@ class JobRunner:
                             is_real_stock = False
 
                 # Fallback for Media Fetching
-                if not raw_clip_path:
+                if not raw_clip_path or not Path(raw_clip_path).exists() or Path(raw_clip_path).stat().st_size == 0:
                     fallback_filename = f"fallback_{sc['scene_id']}.mp4"
-                    fallback_file = downloads_dir / fallback_filename
+                    fallback_file = (downloads_dir / fallback_filename).resolve()
+                    os.makedirs(downloads_dir, exist_ok=True)
                     primary_ratio = aspect_ratios[0] if aspect_ratios else "16:9"
                     w, h = ASPECT_RATIO_DIMENSIONS.get(primary_ratio, (854, 480))
                     duration_s = max(1.0, float(sc.get("duration", 3.0)))
@@ -615,7 +623,7 @@ class JobRunner:
                     # 1. Fall back to downloading a single static image if thumbnail_url exists
                     thumb_url = getattr(chosen_clip, "thumbnail_url", None)
                     if thumb_url and isinstance(thumb_url, str) and thumb_url.startswith("http"):
-                        tmp_thumb = downloads_dir / f"thumb_{sc['scene_id']}.jpg"
+                        tmp_thumb = (downloads_dir / f"thumb_{sc['scene_id']}.jpg").resolve()
                         try:
                             async with httpx.AsyncClient(timeout=5.0, follow_redirects=True) as client:
                                 t_resp = await client.get(thumb_url)
@@ -664,8 +672,8 @@ class JobRunner:
                         finally:
                             tmp_thumb.unlink(missing_ok=True)
 
-                    # 2. Or generating a solid color background clip using FFmpeg
-                    if not raw_clip_path:
+                    # 2. Solid color background clip using FFmpeg
+                    if not raw_clip_path or not Path(raw_clip_path).exists() or Path(raw_clip_path).stat().st_size == 0:
                         cmd_solid = [
                             ffmpeg_engine.ffmpeg_path,
                             "-y",
@@ -703,12 +711,12 @@ class JobRunner:
                                 logger.info("Generated solid color background clip for scene %s: %s", sc['scene_id'], fallback_file.name)
                             else:
                                 err_tail = proc_s.stderr.strip() if proc_s.stderr else "non-zero return code"
-                                logger.error("Solid color background clip failed: %s", err_tail)
+                                logger.warning("Solid color background clip failed (%s); trying fallback visual generator", err_tail)
                         except Exception as s_err:
-                            logger.error("Exception generating solid color clip: %s", str(s_err))
+                            logger.warning("Exception generating solid color clip: %s", str(s_err))
 
                     # 3. Last resort procedural fallback
-                    if not raw_clip_path:
+                    if not raw_clip_path or not Path(raw_clip_path).exists() or Path(raw_clip_path).stat().st_size == 0:
                         try:
                             await generate_visual_fallback(
                                 prompt=query,
@@ -723,6 +731,32 @@ class JobRunner:
                                     used_clip_paths.add(raw_clip_path)
                         except Exception as fb_err:
                             logger.warning("Safety fallback generation failed: %s", str(fb_err))
+
+                    # 4. Emergency guaranteed fallback: basic color solid directly created
+                    if not raw_clip_path or not Path(raw_clip_path).exists() or Path(raw_clip_path).stat().st_size == 0:
+                        cmd_emergency = [
+                            ffmpeg_engine.ffmpeg_path,
+                            "-y",
+                            "-threads", "1",
+                            "-f", "lavfi",
+                            "-i", f"color=c=0x111827:s={w}x{h}:d={duration_s}",
+                            "-c:v", "libx264",
+                            "-preset", "ultrafast",
+                            "-tune", "fastdecode",
+                            "-crf", "28",
+                            "-pix_fmt", "yuv420p",
+                            "-t", str(duration_s),
+                            str(fallback_file),
+                        ]
+                        try:
+                            gc.collect()
+                            proc_em = await asyncio.to_thread(subprocess.run, cmd_emergency, capture_output=True, text=True, timeout=10)
+                            if proc_em.returncode == 0 and fallback_file.exists() and fallback_file.stat().st_size > 0:
+                                raw_clip_path = str(fallback_file)
+                                async with lock:
+                                    used_clip_paths.add(raw_clip_path)
+                        except Exception as em_err:
+                            logger.error("Emergency color clip generation failed: %s", em_err)
 
                 is_fallback_clip = (
                     chosen_clip.provider in ("ai_generator", "ai_fallback", "mock_stock_fallback", "ai_generative_fallback")
@@ -751,6 +785,15 @@ class JobRunner:
             # Concurrently fetch/download footage across all scenes
             await asyncio.gather(*(resolve_scene_footage(sc, idx) for idx, sc in enumerate(scenes_data)))
             gc.collect()
+
+            # Verify all scenes have guaranteed existing clip file on disk
+            for idx, sc in enumerate(scenes_data):
+                rcp = sc.get("raw_clip_path")
+                if not rcp or not Path(rcp).exists() or Path(rcp).stat().st_size == 0:
+                    raise AssetNotFoundError(
+                        f"AssetNotFound: Could not find required file at {rcp or 'unknown_path'} for scene {sc.get('scene_id', idx+1)}"
+                    )
+
             timings["footage_search"] = round(time.time() - t0, 3)
 
             # -------------------------------------------------------------
@@ -849,9 +892,9 @@ class JobRunner:
             t0 = time.time()
             db.update_job_progress(job_id, "processing", 92, "validating_outputs")
             for r in aspect_ratios:
-                v_file = staging_dir / f"video_{r.replace(':', '_')}.mp4"
+                v_file = (staging_dir / f"video_{r.replace(':', '_')}.mp4").resolve()
                 if not v_file.exists() or v_file.stat().st_size == 0:
-                    raise RenderFailedError(f"Rendered video for aspect ratio {r} is missing or corrupted.")
+                    raise RenderFailedError(f"AssetNotFound: Could not find required rendered video output at {v_file}")
                 probe_res = await asyncio.to_thread(probe_media, v_file)
                 if not probe_res.get("is_valid"):
                     raise RenderFailedError(
@@ -859,7 +902,7 @@ class JobRunner:
                     )
 
             if not srt_path.exists() or srt_path.stat().st_size == 0:
-                raise RenderFailedError("Captions file captions.srt is missing or corrupted.")
+                raise RenderFailedError(f"AssetNotFound: Could not find required captions file at {srt_path}")
             timings["output_validation"] = round(time.time() - t0, 3)
 
             # -------------------------------------------------------------
@@ -950,23 +993,40 @@ class JobRunner:
                 await send_job_webhook(callback_url, job_id, webhook_payload)
 
         except AppException as ae:
+            import sys
             logger.error("Job %s failed with application error [%s]: %s", job_id, ae.code, ae.message)
-            db.complete_job_failure(job_id, ae.to_dict()["error"], stage=job_data.get("stage", "failed"))
+            traceback.print_exc(file=sys.stdout)
+            sys.stdout.flush()
+            latest_job = db.get_job(job_id)
+            current_stage = latest_job.get("stage", "failed") if latest_job else "failed"
+            err_payload = ae.to_dict()["error"]
+            if not err_payload.get("message"):
+                err_payload["message"] = str(ae)
+            if not err_payload.get("details"):
+                err_payload["details"] = {}
+            err_payload["details"]["traceback"] = traceback.format_exc()
+            db.complete_job_failure(job_id, err_payload, stage=current_stage)
             if staging_dir.exists():
                 shutil.rmtree(staging_dir, ignore_errors=True)
             callback_url = req.get("callback_url")
             if callback_url:
-                await send_job_webhook(callback_url, job_id, {"job_id": job_id, "status": "failed", "error": ae.to_dict()["error"]})
+                await send_job_webhook(callback_url, job_id, {"job_id": job_id, "status": "failed", "error": err_payload})
 
         except Exception as ex:
+            import sys
             logger.error("Job %s failed during pipeline execution: %s", job_id, str(ex), exc_info=True)
+            traceback.print_exc(file=sys.stdout)
+            sys.stdout.flush()
+            latest_job = db.get_job(job_id)
+            current_stage = latest_job.get("stage", "failed") if latest_job else "failed"
+            err_msg = str(ex).strip() or f"AssetNotFound or internal pipeline error: {type(ex).__name__}"
             err = {
-                "code": "PIPELINE_ERROR",
-                "message": str(ex),
-                "retryable": True,
+                "code": getattr(ex, "code", "PIPELINE_ERROR"),
+                "message": err_msg,
+                "retryable": getattr(ex, "retryable", False),
                 "details": {"traceback": traceback.format_exc()},
             }
-            db.complete_job_failure(job_id, err, stage="failed")
+            db.complete_job_failure(job_id, err, stage=current_stage)
             if staging_dir.exists():
                 shutil.rmtree(staging_dir, ignore_errors=True)
 
