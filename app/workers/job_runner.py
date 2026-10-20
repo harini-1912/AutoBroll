@@ -204,23 +204,101 @@ class JobRunner:
             db.update_job_progress(job_id, "processing", 15, "ingesting_audio")
             narration_audio_path = staging_dir / "narration.wav"
 
-            if audio_url:
-                if audio_url.startswith("http://") or audio_url.startswith("https://"):
-                    # Download audio with retry
-                    async def _download_audio():
-                        async with httpx.AsyncClient(timeout=15.0) as client:
-                            resp = await client.get(audio_url)
-                            resp.raise_for_status()
-                            narration_audio_path.write_bytes(resp.content)
-                    try:
-                        await execute_with_retry(_download_audio, max_retries=2, operation_name=f"Audio download for job {job_id}")
-                    except Exception as e:
-                        # Fallback for test URLs or simulated unreachable URLs
-                        warnings.append(f"Could not reach external audio_url ({str(e)}). Synthesizing narration fallback.")
-                        self.tts_provider.synthesize("Narration audio download fallback.", req.get("voice", "en-IN-female"), str(narration_audio_path))
-                else:
-                    # Local path or simulated test audio
-                    self.tts_provider.synthesize("Local audio input processed.", req.get("voice", "en-IN-female"), str(narration_audio_path))
+            audio_source_file: Optional[Path] = None
+
+            # 1. Direct local file path passed in request
+            if req.get("audio_local_path"):
+                p = Path(req["audio_local_path"]).resolve()
+                if p.exists() and p.is_file() and p.stat().st_size > 0:
+                    audio_source_file = p
+
+            # 2. Check if audio_url is already a local path on disk
+            if not audio_source_file and audio_url:
+                local_p = Path(audio_url)
+                if local_p.exists() and local_p.is_file() and local_p.stat().st_size > 0:
+                    audio_source_file = local_p
+
+            # 3. Check if audio_url points to a file within local storage (e.g. /download/uploads/ or /uploads/)
+            if not audio_source_file and audio_url:
+                storage_root = Path(settings.LOCAL_STORAGE_DIR).resolve()
+                if "/api/v1/jobs/download/" in audio_url:
+                    rel_part = audio_url.split("/api/v1/jobs/download/")[-1].lstrip("/")
+                    cand = (storage_root / rel_part).resolve()
+                    if cand.exists() and cand.is_file() and cand.stat().st_size > 0:
+                        audio_source_file = cand
+                elif "/uploads/" in audio_url:
+                    rel_part = "uploads/" + audio_url.split("/uploads/")[-1]
+                    cand = (storage_root / rel_part).resolve()
+                    if cand.exists() and cand.is_file() and cand.stat().st_size > 0:
+                        audio_source_file = cand
+
+            if audio_source_file:
+                logger.info("Ingesting local audio file %s (%d bytes)", audio_source_file.name, audio_source_file.stat().st_size)
+                # Convert source audio (MP3/WAV/M4A) into canonical 24kHz mono PCM WAV
+                cmd_conv = [
+                    ffmpeg_engine.ffmpeg_path,
+                    "-y",
+                    "-threads",
+                    str(getattr(settings, "FFMPEG_THREADS", 2)),
+                    "-i",
+                    str(audio_source_file),
+                    "-ac",
+                    "1",
+                    "-ar",
+                    "24000",
+                    "-c:a",
+                    "pcm_s16le",
+                    str(narration_audio_path),
+                ]
+                try:
+                    res_conv = await asyncio.to_thread(
+                        subprocess.run, cmd_conv, capture_output=True, text=True, timeout=30
+                    )
+                    if not (res_conv.returncode == 0 and narration_audio_path.exists() and narration_audio_path.stat().st_size > 0):
+                        logger.warning("FFmpeg audio normalization failed (%s); copying directly", res_conv.stderr[:100] if res_conv.stderr else "unknown error")
+                        shutil.copy2(str(audio_source_file), str(narration_audio_path))
+                except Exception as e:
+                    logger.warning("Failed converting source audio to wav: %s; copying directly", str(e))
+                    shutil.copy2(str(audio_source_file), str(narration_audio_path))
+
+            elif audio_url and (audio_url.startswith("http://") or audio_url.startswith("https://")):
+                temp_dl = staging_dir / "temp_input_audio"
+                async def _download_audio():
+                    async with httpx.AsyncClient(timeout=20.0, follow_redirects=True) as client:
+                        resp = await client.get(audio_url)
+                        resp.raise_for_status()
+                        temp_dl.write_bytes(resp.content)
+                try:
+                    await execute_with_retry(_download_audio, max_retries=2, operation_name=f"Audio download for job {job_id}")
+                    # Normalize downloaded audio to canonical wav
+                    cmd_conv = [
+                        ffmpeg_engine.ffmpeg_path,
+                        "-y",
+                        "-threads",
+                        str(getattr(settings, "FFMPEG_THREADS", 2)),
+                        "-i",
+                        str(temp_dl),
+                        "-ac",
+                        "1",
+                        "-ar",
+                        "24000",
+                        "-c:a",
+                        "pcm_s16le",
+                        str(narration_audio_path),
+                    ]
+                    res_conv = await asyncio.to_thread(
+                        subprocess.run, cmd_conv, capture_output=True, text=True, timeout=30
+                    )
+                    if not (res_conv.returncode == 0 and narration_audio_path.exists() and narration_audio_path.stat().st_size > 0):
+                        shutil.copy2(str(temp_dl), str(narration_audio_path))
+                except Exception as e:
+                    # Fallback for test URLs or simulated unreachable URLs
+                    warnings.append(f"Could not reach external audio_url ({str(e)}). Synthesizing narration fallback.")
+                    self.tts_provider.synthesize("Narration audio download fallback.", req.get("voice", "en-IN-female"), str(narration_audio_path))
+            elif audio_url:
+                # Fallback for non-http audio_url that did not resolve on disk
+                self.tts_provider.synthesize("Local audio input processed.", req.get("voice", "en-IN-female"), str(narration_audio_path))
+
             timings["ingestion"] = round(time.time() - t0, 3)
 
             # -------------------------------------------------------------
@@ -231,7 +309,7 @@ class JobRunner:
             total_duration = 5.0
             tts_timestamps: List[Dict[str, Any]] = []
 
-            if not audio_url:
+            if not audio_url and not audio_source_file:
                 voice = req.get("voice", settings.DEFAULT_VOICE)
                 if script:
                     narration_text = script
@@ -751,14 +829,13 @@ class JobRunner:
                 except Exception as e:
                     logger.debug("Failed cleaning scratch dir %s: %s", p, str(e))
 
-        # Remove per-ratio scenes directories only if not keeping final artifacts
-        if not keep_final_artifacts:
-            for s_dir in target_dir.glob("scenes_*"):
-                if s_dir.is_dir():
-                    try:
-                        shutil.rmtree(s_dir, ignore_errors=True)
-                    except Exception as e:
-                        logger.debug("Failed cleaning scene dir %s: %s", s_dir, str(e))
+        # Remove per-ratio scenes directories (scenes_16_9, scenes_9_16, scenes_1_1)
+        for s_dir in target_dir.glob("scenes_*"):
+            if s_dir.is_dir():
+                try:
+                    shutil.rmtree(s_dir, ignore_errors=True)
+                except Exception as e:
+                    logger.debug("Failed cleaning scene dir %s: %s", s_dir, str(e))
 
         # Remove concat demuxer text files and partial files
         scratch_patterns = ["concat_*.txt", "concat_list.txt", "*.part", "*.tmp*", "*.tmp_ai*", "*.tmp_kenburns*"]

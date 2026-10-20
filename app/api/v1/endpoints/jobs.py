@@ -104,6 +104,7 @@ async def create_job_upload(
     aspect_ratios: str = Form("16:9,9:16"),
     style: str = Form("bright, modern, real-world footage"),
     avoid: Optional[str] = Form(None),
+    script: Optional[str] = Form(None),
     burn_in_captions: bool = Form(True),
     idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
 ):
@@ -132,13 +133,15 @@ async def create_job_upload(
     storage = get_storage()
     rel_path = f"uploads/{job_id}{ext}"
     saved_url = storage.save_bytes(rel_path, content, content_type=audio_file.content_type)
+    local_path = (Path(settings.LOCAL_STORAGE_DIR) / rel_path).resolve()
 
     ratios_list = [r.strip() for r in aspect_ratios.split(",") if r.strip()]
     avoid_list = [a.strip() for a in avoid.split(",") if a.strip()] if avoid else []
 
     req_dict = {
         "audio_url": saved_url,
-        "script": None,
+        "audio_local_path": str(local_path),
+        "script": script.strip() if script else None,
         "scenes": None,
         "voice": voice,
         "aspect_ratios": ratios_list,

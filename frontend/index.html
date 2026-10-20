@@ -427,6 +427,7 @@
             formData.append('aspect_ratios', aspectRatios.join(','));
             formData.append('style', style);
             if (avoid) formData.append('avoid', avoid);
+            if (script && script.trim()) formData.append('script', script.trim());
             formData.append('burn_in_captions', 'true');
 
             res = await fetch('/api/v1/broll/jobs/upload', {
@@ -856,8 +857,18 @@
                             </div>
                           )}
                           <p style={{fontSize: '0.75rem', color: '#64748b', marginTop: '0.35rem'}}>
-                            Engine automatically runs Whisper speech-to-text alignment directly on your voiceover audio.
+                            Engine automatically ingests and aligns your voiceover directly on the server.
                           </p>
+                          <div className="form-group" style={{marginTop: '0.85rem'}}>
+                            <label style={{fontSize: '0.8rem'}}>Voiceover Script / Topic (Optional)</label>
+                            <textarea
+                              rows="3"
+                              value={script}
+                              onChange={e => setScript(e.target.value)}
+                              placeholder="Paste the spoken script or topic summary here to ensure stock footage perfectly matches what is said..."
+                              style={{fontSize: '0.82rem'}}
+                            />
+                          </div>
                         </div>
                       ) : (
                         <div className="form-group">

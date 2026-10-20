@@ -42,12 +42,20 @@ def test_create_job_with_audio_url_returns_202(client):
 def test_create_job_with_audio_upload_returns_202(client):
     fake_audio = io.BytesIO(b"FAKE_MP3_AUDIO_HEADER_DATA_STREAM")
     files = {"audio_file": ("voiceover.mp3", fake_audio, "audio/mpeg")}
-    data = {"voice": "en-IN-female", "aspect_ratios": "16:9,9:16"}
+    data = {"voice": "en-IN-female", "aspect_ratios": "16:9", "script": "Hello uploaded voiceover."}
 
     response = client.post("/api/v1/jobs/upload", files=files, data=data)
     assert response.status_code == 202
     resp_data = response.json()
     assert "job_id" in resp_data
+    job_id = resp_data["job_id"]
+
+    from app.core.database import db
+    job_record = db.get_job(job_id)
+    req_data = job_record.get("request_payload") or {}
+    assert "audio_local_path" in req_data
+    assert req_data["audio_local_path"].endswith(".mp3")
+    assert req_data["script"] == "Hello uploaded voiceover."
 
 def test_create_job_with_invalid_audio_extension_returns_415(client):
     fake_file = io.BytesIO(b"SOMETHING_NOT_AUDIO")
