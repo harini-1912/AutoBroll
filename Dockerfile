@@ -20,20 +20,25 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy application source code with user ownership
 COPY --chown=user:user . .
 
-# Ensure artifacts, data, storage, and temp directories exist with ownership given to user 1000
+# Ensure artifacts, data, storage, temp directories exist and /tmp has full write permissions
 RUN mkdir -p /home/user/app/artifacts \
              /home/user/app/data \
              /home/user/app/storage \
              /home/user/app/temp && \
+    chmod 1777 /tmp && \
     chown -R user:user /home/user/app
 
 USER user
 
+# Default environment variables optimized for free tiers (512MB RAM constraints)
 ENV HOME=/home/user \
-    PORT=7860 \
+    PORT=8000 \
+    FFMPEG_THREADS=2 \
+    MAX_CONCURRENT_JOBS=1 \
     LOCAL_STORAGE_DIR=/home/user/app/artifacts \
     ARTIFACTS_DIR=/home/user/app/artifacts
 
-EXPOSE 7860
+EXPOSE 8000
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "7860"]
+# Dynamic port binding for Render, Koyeb, Railway, Hugging Face, or local docker
+CMD ["sh", "-c", "exec uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
